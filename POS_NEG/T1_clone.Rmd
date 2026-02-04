@@ -1,0 +1,135 @@
+```{r}
+library(pacman)
+p_load(rtracklayer, GenomicRanges, dplyr, data.table, dplyr, DESeq2, ggplot2, ggrepel, tidyr, 
+      readxl, biomaRt, clusterProfiler, org.Hs.eg.db, DT, ChIPseeker, TxDb.Hsapiens.UCSC.hg38.knownGene, 
+      pheatmap, flashClust, ggraph, ComplexHeatmap, gridExtra, grid)
+knitr::opts_chunk$set(fig.width=6, fig.height=6, echo = T)
+pthres <- 0.1
+lfc <- log2(1.25)
+source("~/NB_lncRNA/code/BioInsights/more_code.R")
+```
+
+```{r}
+tmp <-  readRDS("~/NB_lncRNA/output/code/lncRNA/DataQC/data2DEG.RDS")
+sampleInfo <- tmp[[2]]
+samples2do <- c("NeNR1", "NeNR2", "T1cN1", "T1cN2")
+sampleInfo <- sampleInfo[Barcode %in% samples2do, ] 
+sampleInfo$Group <- sampleInfo$POSNEG
+sampleInfo <- sampleInfo[c(3, 4, 1, 2),]
+```
+
+```{r}
+#lncRNA
+duomenys <- readRDS("~/NB_lncRNA/output/code/lncRNA/DataQC/data2DEG.RDS")
+#pachekint kokie genai (ar tik lncRNA ar ir pc)
+
+list_of_4 <- duomenys[[1]]
+counts_lnc <- list_of_4[[2]]
+counts_lnc <- counts_lnc[, samples2do]
+dds <- DESeqDataSetFromMatrix(countData = round(counts_lnc), 
+                              colData = sampleInfo, 
+                              design = ~POSNEG)
+dds <- DESeq(dds)
+vsd <- vst(dds)
+mat_lnc <- assay(vsd)
+res <- results(dds) %>% as.data.table(., keep.rownames=TRUE)
+
+
+sig_lncRNAs <- subset(res, padj < 0.05 & abs(log2FoldChange) > 2)
+sig_lncRNAs <- sig_lncRNAs[order(sig_lncRNAs$padj), ]
+sig_lncRNAs$gene_id <- rownames(sig_lncRNAs)
+sig_lncRNAs <- as.data.frame(sig_lncRNAs)
+#rownames(sig_lncRNAs) <- sub("\\..*$", "", rownames(sig_lncRNAs))
+mat_filt_lnc <- mat_lnc[rownames(mat_lnc) %in% sig_lncRNAs$rn, ]
+rownames(mat_filt_lnc) <- sub("\\..*$", "", rownames(mat_filt_lnc))
+```
+
+```{r}
+#Protein coding
+duomenys <- readRDS("~/NB_lncRNA/input/data2DEG_protein.RDS")
+
+list_of_4 <- duomenys[[1]]
+counts_pc <- list_of_4[[2]]
+counts_pc <- counts_pc[, samples2do]
+#length <- list_of_4[[3]]
+#length <- length[, samples2do]
+
+dds <- DESeqDataSetFromMatrix(countData = round(counts_pc), 
+                              colData = sampleInfo, 
+                              design = ~POSNEG)
+dds <- DESeq(dds)
+vsd_pc <- vst(dds)
+mat_pc <- assay(vsd_pc)
+res_pc <- results(dds) %>% as.data.table(., keep.rownames=TRUE)
+
+sig <- subset(res_pc, padj < 0.05 & abs(log2FoldChange) >= 4)
+sig <- sig[order(sig$padj), ]
+sig <- as.data.frame(sig)
+mat_filt_pc <- mat_pc[rownames(mat_pc) %in% sig$rn, ]
+rownames(mat_filt_pc) <- sub("\\..*$", "", rownames(mat_filt_pc))
+```
+
+
+# Bendras mėginių ir raiškos pasižiūrėjimas
+
+## Heatmap
+```{r}
+annotation_col <- data.frame(Group = sampleInfo$Group)
+ann_colors = list(Group = c(NEG="cyan", POS="lightpink"))
+rownames(annotation_col) <- sampleInfo$Barcode
+mat <- rbind(mat_filt_lnc, mat_filt_pc)
+pheatmap(mat,
+         scale = "row",
+         annotation_col = annotation_col,
+         annotation_colors = ann_colors,
+         show_rownames = FALSE,
+         cluster_rows = TRUE,
+         cluster_cols = TRUE,
+         main= "bendras",
+         silent = TRUE)
+```
+
+
+## Koreliacija pagal mėginius ir PCA
+```{r}
+countai <- rbind(counts_lnc, counts_pc)
+
+#get_pca(mat_filt_lnc, sampleInfo) + ggtitle("tik lncRNA")
+#get_pca(mat_filt_pc, sampleInfo)+ ggtitle("tik mRNA")
+get_pca(mat, sampleInfo) + ggtitle("Bendras")
+```
+
+
+## Pagal raišką
+```{r}
+# pearson sutinkama straipsniuose, bet yra kad siūlo spearman
+cor_matrix <- cor(t(mat_filt_lnc), t(mat_filt_pc), method = "spearman")
+cor_df <- reshape2::melt(cor_matrix)
+colnames(cor_df) <- c("lncRNA", "mRNA", "value")
+pheatmap(cor_matrix,
+         clustering_distance_rows = "euclidean",
+         clustering_distance_cols = "euclidean",
+         show_rownames = FALSE,
+         show_colnames = FALSE)
+```
+
+
+## Stipriai koreliuojančių su lncRNA mRNA funckinė anotacija
+```{r}
+# Pasidaryti atskirus tegiamai ir neigiamai koreliuojantiems (?)
+cor_df_sig <- subset(cor_df, abs(value) > 0.8)
+
+#sudaro klasterius
+genes <- unique(as.character(cor_df_sig$mRNA[cor_df_sig$lncRNA %in% rownames(mat_filt_lnc)]))
+
+ego <- enrichGO(genes, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP")
+dotplot(ego, showCategory=10) + ggtitle("Koreliuojantys bendrai")
+```
+
+
+
+
+
+
+
+

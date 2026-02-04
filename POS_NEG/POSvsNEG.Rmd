@@ -66,8 +66,10 @@ mat_filt_pc <- mat_pc[rownames(mat_pc) %in% sig$rn, ]
 rownames(mat_filt_pc) <- sub("\\..*$", "", rownames(mat_filt_pc))
 ```
 
+# Bendras mėginių pasižiūrėjimas {.tabset}
 Kaip kinta mRNA ir lncRNA tarp mėginių (ar yra atsiskyrimas pagal abu)
 
+## Heatmap
 ```{r}
 annotation_col <- data.frame(Group = sampleInfo$Group)
 ann_colors = list(Group = c(NEG="cyan", POS="lightpink"))
@@ -112,6 +114,33 @@ g3 <- grid.grabExpr(draw(p3))
 gridExtra::grid.arrange(g1, g2, g3, ncol = 3)
 ```
 
+## Koreliacija pagal mėginius PCA
+(iš visų)
+```{r}
+countai <- rbind(counts_lnc, counts_pc)
+
+cor_mat <- cor(countai)
+cor_df <- reshape2::melt(cor_mat)
+colnames(cor_df) <- c("Var1", "Var2", "value")
+
+ggplot(cor_df, aes(x = Var1, y = Var2, fill = value)) +
+        geom_tile(color = "white") +
+        labs(title="B", fill= " ")+
+        scale_fill_gradientn(
+        colors = c("blue", "white", "red"),
+        limits = c(min(cor_df$value), max(cor_df$value))) +
+        theme(
+        plot.title = element_text(size = 20, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_text(size = 16, face = "bold", angle = 90, vjust = 0.5, hjust = 1),
+        axis.text.y = element_text(size = 16, face = "bold")) +
+        coord_fixed()
+
+#get_pca(mat_filt_lnc, sampleInfo) + ggtitle("tik lncRNA")
+#get_pca(mat_filt_pc, sampleInfo)+ ggtitle("tik mRNA")
+get_pca(mat, sampleInfo) + ggtitle("Bendras")
+```
 
 # Bendrai enrichment {.tabset}
 ## lncRNA enrichment
@@ -315,36 +344,6 @@ dotplot(go_res)+ ggtitle("GO praturtinimo analizė")
 
 
 # Koreliacija {.tabset}
-
-## Pagal mėginius
-(iš visų)
-```{r}
-countai <- rbind(counts_lnc, counts_pc)
-
-cor_mat <- cor(countai)
-cor_df <- reshape2::melt(cor_mat)
-colnames(cor_df) <- c("Var1", "Var2", "value")
-
-ggplot(cor_df, aes(x = Var1, y = Var2, fill = value)) +
-        geom_tile(color = "white") +
-        labs(title="B", fill= " ")+
-        scale_fill_gradientn(
-        colors = c("blue", "white", "red"),
-        limits = c(min(cor_df$value), max(cor_df$value))) +
-        theme(
-        plot.title = element_text(size = 20, face = "bold"),
-        axis.title.x = element_blank(),
-        axis.title.y = element_blank(),
-        axis.text.x = element_text(size = 16, face = "bold", angle = 90, vjust = 0.5, hjust = 1),
-        axis.text.y = element_text(size = 16, face = "bold")) +
-        coord_fixed()
-
-#get_pca(mat_filt_lnc, sampleInfo) + ggtitle("tik lncRNA")
-#get_pca(mat_filt_pc, sampleInfo)+ ggtitle("tik mRNA")
-mat_all <- rbind(mat_filt_lnc, mat_filt_pc)
-get_pca(mat_all, sampleInfo) + ggtitle("Bendras")
-```
-
 
 ## Pagal raišką
 ```{r}
