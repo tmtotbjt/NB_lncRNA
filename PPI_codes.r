@@ -80,7 +80,6 @@ write.csv(ppi_modules, "~/NB_lncRNA/output/code/BioInsights/PPI_modules.csv", ro
 ```{r, eval = F, echo = F}
 ppi <- read.csv("~/NB_lncRNA/output/code/BioInsights/PPI_modules.csv")
 
-
 modules <- split(ppi$Gene, ppi$Module)
 
 ens2sym <- sig_with_symbol$gene_name
@@ -157,11 +156,33 @@ results_prefilt$perm_pval <- mapply(
   results_prefilt$Module
 )
 
-final_hits <- subset(
-  results_prefilt,
-  abs(rho) >= 0.7 & perm_pval < 0.05
-)
+final_hits <- subset(results_prefilt, abs(rho) >= 0.7 & perm_pval < 0.05)
 
 final_hits <- final_hits[order(-abs(final_hits$rho)), ]
 saveRDS(final_hits, "~/NB_lncRNA/output/code/BioInsights/final_hits.RDS")
+```
+
+
+```{r, eval = F, echo = F}
+module_entrez <- lapply(modules, function(genes) {
+  bitr(
+    genes,
+    fromType = "SYMBOL",
+    toType   = "ENTREZID",
+    OrgDb    = org.Hs.eg.db
+  )$ENTREZID
+})
+module_entrez <- module_entrez[sapply(module_entrez, length) > 5]
+
+ego_list <- lapply(names(module_entrez), function(m) {
+  enrichGO(gene          = module_entrez[[m]],
+          OrgDb         = org.Hs.eg.db,
+          ont           = "BP",
+          pAdjustMethod = "BH",
+          qvalueCutoff  = 0.05,
+          readable      = TRUE)})
+
+names(ego_list) <- names(module_entrez)
+
+saveRDS(ego_list, "~/NB_lncRNA/output/code/BioInsights/GO_enrichment_all_modules.RDS")
 ```

@@ -2,7 +2,7 @@
 library(pacman)
 p_load(rtracklayer, GenomicRanges, dplyr, data.table, dplyr, DESeq2, ggplot2, ggrepel, tidyr, 
       readxl, igraph, biomaRt, clusterProfiler, org.Hs.eg.db, DT, ChIPseeker, TxDb.Hsapiens.UCSC.hg38.knownGene, 
-      pheatmap, WGCNA, flashClust, ggraph, ComplexHeatmap)
+      pheatmap, flashClust, ggraph, ComplexHeatmap)
 knitr::opts_chunk$set(fig.width=6, fig.height=6, echo = T)
 pthres <- 0.1
 lfc <- log2(1.25)
@@ -386,16 +386,6 @@ ego <- enrichGO(genes, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP")
 dotplot(ego, showCategory=10) + ggtitle("Koreliuojantys bendrai")
 ```
 
-```{r, eval = F, echo = F}
-ego_p <- enrichGO(unique_p, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP")
-dotplot(ego_p, showCategory=3) + ggtitle("Unique GO padidėjusios raiškos")
-
-ego_s <- enrichGO(unique_s, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP")
-dotplot(ego_s, showCategory=10) + ggtitle("Unique GO sumažėjusios raiškos")
-```
-
-
-
 # Protein-protein interaction network construction, hub gene selection, and module analysis
 ```{r}
 geneGR_df <- as.data.frame(geneGR)
@@ -414,145 +404,23 @@ keep <- !is.na(new_names)
 mat_filt_pc_sym <- mat_filt_pc[keep, ]
 rownames(mat_filt_pc_sym) <- new_names[keep]
 ```
-```{r, eval = F, echo = F}
-library(STRINGdb)
-string_db <- STRINGdb$new(version = "12.0",
-                          species = 9606,
-                          score_threshold = 400,
-                          network_type = "full")
-mapped <- string_db$map(data.frame(gene_name = sig_with_symbol$gene_name), "gene_name", removeUnmappedRows = TRUE)
-#mapped <- mapped[order(abs(mapped$log2FoldChange), decreasing = TRUE), ]
-mapped_valid <- mapped[!is.na(mapped$STRING_id), ]
-
-ppi_edges <- string_db$get_interactions(mapped_valid$STRING_id)
-ppi_edges <- ppi_edges[ppi_edges$combined_score >= 700, ]
-id2gene <- mapped_valid$gene_name
-names(id2gene) <- mapped_valid$STRING_id
-
-ppi_edges$gene1 <- id2gene[ppi_edges$from]
-ppi_edges$gene2 <- id2gene[ppi_edges$to]
-
-ppi_edges <- ppi_edges[!is.na(ppi_edges$gene1) & !is.na(ppi_edges$gene2), ]
-library(igraph)
-
-g <- graph_from_data_frame(
-  ppi_edges[, c("gene1", "gene2")],
-  directed = FALSE
-)
-
-g <- igraph::simplify(g, remove.multiple = TRUE, remove.loops = TRUE)
-cl <- cluster_louvain(g)
-modules <- split(V(g)$name, membership(cl))
-modules <- modules[sapply(modules, length) >= 3]
-ppi_modules <- data.frame(
-  Module = rep(names(modules), sapply(modules, length)),
-  Gene   = unlist(modules)
-)
-
-write.csv(ppi_modules, "~/NB_lncRNA/output/code/BioInsights/PPI_modules.csv", row.names = FALSE)
-```
-
-```{r, eval = F, echo = F}
-ppi <- read.csv("~/NB_lncRNA/output/code/BioInsights/PPI_modules.csv")
-
-
-modules <- split(ppi$Gene, ppi$Module)
-
-module_expr <- lapply(modules, function(genes) {
-  genes <- intersect(genes, rownames(mat_filt_pc_sym))
-  colMeans(mat_filt_pc_sym[genes, , drop = FALSE])
-})
-
-module_expr <- do.call(rbind, module_expr)
-
-results <- data.frame()
-
-for (lnc in rownames(mat_filt_lnc)) {
-  for (mod in rownames(module_expr)) {
-
-    cor_test <- cor.test(
-      as.numeric(mat_filt_lnc[lnc, ]),
-      as.numeric(module_expr[mod, ]),
-      method = "spearman"
-    )
-
-    results <- rbind(results, data.frame(
-      lncRNA = lnc,
-      Module = mod,
-      rho = cor_test$estimate,
-      pval = cor_test$p.value
-    ))
-  }
-}
-
-perm_test <- function(x, y, nperm = 500) {
-
-  keep <- is.finite(x) & is.finite(y)
-  x <- x[keep]
-  y <- y[keep]
-
-  if (length(x) < 5) return(NA_real_)
-
-  # FORCE numeric scalar
-  obs <- as.numeric(
-    suppressWarnings(cor(x, y, method = "spearman"))
-  )
-
-  perm_rho <- numeric(nperm)
-
-  for (i in seq_len(nperm)) {
-    perm_rho[i] <- as.numeric(
-      suppressWarnings(cor(sample(x), y, method = "spearman"))
-    )
-  }
-
-  mean(abs(perm_rho) >= abs(obs))
-}
-
-results_prefilt <- subset(results, abs(rho) >= 0.6)
-nrow(results_prefilt)
-
-results_prefilt$perm_pval <- mapply(
-  function(l, m) {
-    perm_test(
-      as.numeric(mat_filt_lnc[l, ]),
-      as.numeric(module_expr[m, ])
-    )
-  },
-  results_prefilt$lncRNA,
-  results_prefilt$Module
-)
-
-final_hits <- subset(
-  results_prefilt,
-  abs(rho) >= 0.7 & perm_pval < 0.05
-)
-
-final_hits <- final_hits[order(-abs(final_hits$rho)), ]
-saveRDS(final_hits, "~/NB_lncRNA/output/code/BioInsights/final_hits.RDS")
-```
 
 ```{r}
 final_hits <- readRDS("~/NB_lncRNA/output/code/BioInsights/final_hits.RDS")
 ppi <- read.csv("~/NB_lncRNA/output/code/BioInsights/PPI_modules.csv")
 modules <- split(ppi$Gene, ppi$Module)
-modules <- modules[sapply(modules, length) >= 5]
 
+library(igraph)
 module_expr <- lapply(modules, function(genes) {
   genes <- intersect(genes, rownames(mat_filt_pc_sym))
-  
   if (length(genes) < 2) return(NULL)
-  
-  colMeans(mat_filt_pc_sym[genes, , drop = FALSE])
-})
+  colMeans(mat_filt_pc_sym[genes, , drop = FALSE]) })
 
 module_expr <- module_expr[!sapply(module_expr, is.null)]
 module_expr <- do.call(rbind, module_expr)
 rownames(module_expr) <- paste0("Module_", rownames(module_expr))
 final_hits$Module <- paste0("Module_", final_hits$Module)
-```
 
-```{r}
 edges <- final_hits[abs(final_hits$rho) >= 0.9 & final_hits$perm_pval <= 0.01,]
 lncGR$gene_id <- sub("\\..*$", "", lncGR$gene_id)
 lnc_map <- setNames(
@@ -566,8 +434,6 @@ edge_df <- data.frame(
   to     = edges$Module,
   weight = abs(edges$rho),
   sign   = ifelse(edges$rho > 0, "positive", "negative"))
-
-library(igraph)
 
 g_lnc_mod <- graph_from_data_frame(
   edge_df,
@@ -592,43 +458,20 @@ V(g_lnc_mod)$color <- ifelse(
 E(g_lnc_mod)$color <- ifelse(
   edge_df$sign == "positive",
   "lightgreen",
-  "midnightblue")
+  "midnightblue"
+)
 
 E(g_lnc_mod)$width <- edge_df$weight * 3
 
-plot(g_lnc_mod,
+plot(
+  g_lnc_mod,
   layout = layout_with_fr,
   vertex.label.cex = 0.7,
   vertex.frame.color = "white",
-  main = "lncRNA–PPI Module Network")
+  main = "lncRNA–PPI Module Network"
+)
 ```
 
-
-```{r, eval = F, echo = F}
-module_entrez <- lapply(modules, function(genes) {
-  bitr(
-    genes,
-    fromType = "SYMBOL",
-    toType   = "ENTREZID",
-    OrgDb    = org.Hs.eg.db
-  )$ENTREZID
-})
-module_entrez <- module_entrez[
-  sapply(module_entrez, length) > 5
-]
-
-ego_list <- lapply(names(module_entrez), function(m) {
-  enrichGO(gene          = module_entrez[[m]],
-          OrgDb         = org.Hs.eg.db,
-          ont           = "BP",
-          pAdjustMethod = "BH",
-          qvalueCutoff  = 0.05,
-          readable      = TRUE)})
-
-names(ego_list) <- names(module_entrez)
-
-saveRDS(ego_list, "~/NB_lncRNA/output/code/BioInsights/GO_enrichment_all_modules.RDS")
-```
 ```{r}
 ego_list <- readRDS("~/NB_lncRNA/output/code/BioInsights/GO_enrichment_all_modules.RDS")
 
@@ -640,27 +483,14 @@ module_annotation <- do.call(
 
   head(data.frame( Module = m, eg@result[, c("Description", "p.adjust")]), 3)}))
 
-head(module_annotation)
+module_labels <- aggregate(Description ~ Module, module_annotation, function(x) x[1])
 
-module_labels <- aggregate(
-  Description ~ Module,
-  module_annotation,
-  function(x) x[1])
-
-ggplot(module_annotation,
-       aes(
-         x = Module,
-         y = Description,
-         size = -log10(p.adjust),
-         color = -log10(p.adjust)
-       )) +
+ggplot(module_annotation, aes(x = Module, y = Description, size = -log10(p.adjust), color = -log10(p.adjust))) +
   geom_point() +
   scale_color_viridis_c() +
   theme_bw() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    axis.title = element_blank()
-  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title = element_blank()) +
   labs(title = "GO Biological Process enrichment of PPI modules")
 
 #module_labels$Module <- paste0("Module_", module_labels$Module)
