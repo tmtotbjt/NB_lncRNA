@@ -1,3 +1,40 @@
+#Keisit išsaugojimo vietas
+
+# GRanges
+gtf <- import("~/NB_lncRNA/input/gencode.v49.annotation.gtf")
+gtf_lnc <- gtf[gtf$gene_type == "lncRNA"]
+gtf_pc <- gtf[gtf$gene_type == "protein_coding"]
+
+lncGR <- GRanges(
+    seqnames = seqnames(gtf_lnc),
+    ranges   = ranges(gtf_lnc),
+    strand   = strand(gtf_lnc),
+    gene_name = mcols(gtf_lnc)$gene_name,
+    gene_id   = mcols(gtf_lnc)$gene_id)
+lncGR <- lncGR[lncGR$gene_id %in% rownames(sig_lncRNAs), ]
+saveRDS(lncGR, "~/NB_lncRNA/output/code/BioInsights/POS_NEG/lncGR.RDS")
+
+geneGR <- GRanges(
+    seqnames = seqnames(gtf_pc),
+    ranges   = ranges(gtf_pc),
+    strand   = strand(gtf_pc),
+    gene_name = mcols(gtf_pc)$gene_name,
+    gene_id   = mcols(gtf_pc)$gene_id)
+geneGR <- geneGR[geneGR$gene_id %in% sig$rn, ]
+saveRDS(geneGR, "~/NB_lncRNA/output/code/BioInsights/POS_NEG/geneGR.RDS")
+
+
+#Koreliuojantys geani, kurių raiška ssumažėjusi/padidėjusi (Ne PPI)
+```{r, eval = F, echo = F}
+ego_p <- enrichGO(unique_p, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP")
+dotplot(ego_p, showCategory=3) + ggtitle("Unique GO padidėjusios raiškos")
+
+ego_s <- enrichGO(unique_s, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP")
+dotplot(ego_s, showCategory=10) + ggtitle("Unique GO sumažėjusios raiškos")
+```
+
+
+
 
 
 # PPI Network and identification of hub lncRNAs
@@ -74,11 +111,11 @@ ppi_modules <- data.frame(
   Gene   = unlist(modules)
 )
 
-write.csv(ppi_modules, "~/NB_lncRNA/output/code/BioInsights/PPI_modules.csv", row.names = FALSE)
+write.csv(ppi_modules, "~/NB_lncRNA/output/code/BioInsights/POS_NEG/PPI_modules.csv", row.names = FALSE)
 ```
 
 ```{r, eval = F, echo = F}
-ppi <- read.csv("~/NB_lncRNA/output/code/BioInsights/PPI_modules.csv")
+ppi <- read.csv("~/NB_lncRNA/output/code/BioInsights/POS_NEG/PPI_modules.csv")
 
 modules <- split(ppi$Gene, ppi$Module)
 
@@ -159,7 +196,7 @@ results_prefilt$perm_pval <- mapply(
 final_hits <- subset(results_prefilt, abs(rho) >= 0.7 & perm_pval < 0.05)
 
 final_hits <- final_hits[order(-abs(final_hits$rho)), ]
-saveRDS(final_hits, "~/NB_lncRNA/output/code/BioInsights/final_hits.RDS")
+saveRDS(final_hits, "~/NB_lncRNA/output/code/BioInsights/POS_NEG/final_hits.RDS")
 ```
 
 
@@ -184,5 +221,71 @@ ego_list <- lapply(names(module_entrez), function(m) {
 
 names(ego_list) <- names(module_entrez)
 
-saveRDS(ego_list, "~/NB_lncRNA/output/code/BioInsights/GO_enrichment_all_modules.RDS")
+saveRDS(ego_list, "~/NB_lncRNA/output/code/BioInsights/POS_NEG/GO_enrichment_all_modules.RDS")
+```
+
+
+```{r}
+modules <- split(ppi$Gene, ppi$Module)
+
+library(igraph)
+module_expr <- lapply(modules, function(genes) {
+  genes <- intersect(genes, rownames(mat_filt_pc_sym))
+  if (length(genes) < 2) return(NULL)
+  colMeans(mat_filt_pc_sym[genes, , drop = FALSE]) })
+
+module_expr <- module_expr[!sapply(module_expr, is.null)]
+module_expr <- do.call(rbind, module_expr)
+rownames(module_expr) <- paste0("Module_", rownames(module_expr))
+final_hits$Module <- paste0("Module_", final_hits$Module)
+
+edges <- final_hits[abs(final_hits$rho) >= 0.9 & final_hits$perm_pval <= 0.01,]
+lncGR$gene_id <- sub("\\..*$", "", lncGR$gene_id)
+lnc_map <- setNames(
+  lncGR$gene_name,
+  lncGR$gene_id)
+edges$lncRNA_symbol <- lnc_map[edges$lncRNA]
+
+
+edge_df <- data.frame(
+  from   = edges$lncRNA_symbol,
+  to     = edges$Module,
+  weight = abs(edges$rho),
+  sign   = ifelse(edges$rho > 0, "positive", "negative"))
+
+g_lnc_mod <- graph_from_data_frame(
+  edge_df,
+  directed = FALSE)
+
+V(g_lnc_mod)$type <- ifelse(
+  grepl("^Module_", V(g_lnc_mod)$name),
+  "Module",
+  "lncRNA")
+V(g_lnc_mod)$degree <- degree(g_lnc_mod)
+
+V(g_lnc_mod)$size <- ifelse(
+  V(g_lnc_mod)$type == "lncRNA",
+  6 + V(g_lnc_mod)$degree * 2,
+  12)
+
+V(g_lnc_mod)$color <- ifelse(
+  V(g_lnc_mod)$type == "lncRNA",
+  "#aa5967",
+  "darkcyan")
+
+E(g_lnc_mod)$color <- ifelse(
+  edge_df$sign == "positive",
+  "lightgreen",
+  "midnightblue"
+)
+
+E(g_lnc_mod)$width <- edge_df$weight * 3
+
+plot(
+  g_lnc_mod,
+  layout = layout_with_fr,
+  vertex.label.cex = 0.7,
+  vertex.frame.color = "white",
+  main = "lncRNA–PPI Module Network"
+)
 ```
