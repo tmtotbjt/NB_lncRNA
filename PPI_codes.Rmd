@@ -12,6 +12,7 @@ lncGR <- GRanges(
     strand   = strand(gtf_lnc),
     gene_name = mcols(gtf_lnc)$gene_name,
     gene_id   = mcols(gtf_lnc)$gene_id)
+#O kam man jis čia ??????????
 lncGR <- lncGR[lncGR$gene_id %in% rownames(lnc_top), ]
 
 ### pasikeisk pav
@@ -94,15 +95,11 @@ ppi <- data.frame(
   Gene   = unlist(modules))
 
 ### pasikeisk pav
-write.csv(ppi, "~/NB_lncRNA/output/code/BioInsights/POS_NEG/PPI_modules_T1.csv", row.names = FALSE)
+write.csv(ppi, "~/NB_lncRNA/output/code/BioInsights/POS_NEG/PPI_modules_K7.csv", row.names = FALSE)
 ### pasikeisk pav
 ```
 
 ```{r, eval = F, echo = F}
-### pasikeisk pav
-ppi <- read.csv("~/NB_lncRNA/output/code/BioInsights/POS_NEG/PPI_modules_T1.csv")
-### pasikeisk pav
-
 rownames(pc_top) <- sub("\\..*$", "", rownames(pc_top))
 lnc_top_e <- lnc_top
 lnc_top_e$rn <- rownames(lnc_top_e)
@@ -124,8 +121,7 @@ rownames(pc_top_sym) <- new_names[keep]
 
 module_expr <- lapply(modules, function(genes) {
   genes <- intersect(genes, rownames(pc_top_sym))
-  colMeans(pc_top_sym[genes, , drop = FALSE])
-})
+  colMeans(pc_top_sym[genes, , drop = FALSE])  })
 
 module_expr <- do.call(rbind, module_expr)
 
@@ -192,7 +188,7 @@ final_hits <- subset(results_prefilt, abs(rho) >= 0.7 & perm_pval < 0.05)
 final_hits <- final_hits[order(-abs(final_hits$rho)), ]
 
 ### pasikeisk pav
-saveRDS(final_hits, "~/NB_lncRNA/output/code/BioInsights/POS_NEG/final_hits_T1.RDS")
+saveRDS(final_hits, "~/NB_lncRNA/output/code/BioInsights/POS_NEG/final_hits_K7.RDS")
 ### pasikeisk pav
 ```
 
@@ -204,8 +200,7 @@ module_entrez <- lapply(modules, function(genes) {
     fromType = "SYMBOL",
     toType   = "ENTREZID",
     OrgDb    = org.Hs.eg.db
-  )$ENTREZID
-})
+  )$ENTREZID  })
 module_entrez <- module_entrez[sapply(module_entrez, length) > 5]
 
 ego_list <- lapply(names(module_entrez), function(m) {
@@ -214,16 +209,16 @@ ego_list <- lapply(names(module_entrez), function(m) {
           ont           = "BP",
           pAdjustMethod = "BH",
           qvalueCutoff  = 0.05,
-          readable      = TRUE)})
+          readable      = TRUE)   })
 
 names(ego_list) <- names(module_entrez)
 
 ### pasikeisk pav
-saveRDS(ego_list, "~/NB_lncRNA/output/code/BioInsights/POS_NEG/GO_en_mod_T1.RDS")
+saveRDS(ego_list, "~/NB_lncRNA/output/code/BioInsights/POS_NEG/GO_en_mod_K7.RDS")
 ### pasikeisk pav
 ```
 
-
+# Nupiešti tinklui
 ```{r}
 modules <- split(ppi$Gene, ppi$Module)
 

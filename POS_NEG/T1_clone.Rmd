@@ -80,7 +80,7 @@ lnc_sd <- apply(lnc_mat, 1, sd)
 pc_sd  <- apply(pc_mat, 1, sd)
 
 lnc_res <- res[rownames(res) %in% names(lnc_sd), ]
-lnc_top <- lnc_res[abs(lnc_res$logFC) > 1.5 & lnc_res$PValue < 0.05, ]
+lnc_top <- lnc_res[abs(lnc_res$logFC) > 1.25 & lnc_res$PValue < 0.05, ]
 pc_res <- res[rownames(res) %in% names(pc_sd), ]
 pc_top <- pc_res[abs(pc_res$logFC) > 2 & pc_res$PValue < 0.05, ]
 ```
@@ -142,30 +142,13 @@ pheatmap(cor_matrix,
 
 ## Stipriai koreliuojančių su lncRNA mRNA funckinė anotacija
 ```{r}
-cor_df_sig <- subset(cor_df, abs(value) > 0.8)
+cor_df_sig <- subset(cor_df, abs(value) > 0.75)
 #sudaro klasterius
 genes <- unique(as.character(cor_df_sig$mRNA))
 
 genes <- sub("\\..*$","", genes)
 ego <- enrichGO(genes, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP")
 dotplot(ego, showCategory=10) + ggtitle("Koreliuojantys bendrai")
-```
-
-
-```{r}
-#Ka darom (protingi (no) pokalbiai su savim):
-
-# padidėjusios sumažėjusios raiškos?
-## Kaip ir ne nes greičiausiai byu persidengimai (kas buvo matoma ir prieš tai)
-# Galima bandyti anotuoti lncRNA pagal tai, prie kokių modulių (su kokiu funcionalumu) prilipo
-
-
-# Ką galima iš čia dar ištraukti?
-## Galima bandyti irgi traukti modulius, bet why ???
-### Dabar moduliuose nebūtų genų, kurie pakitę dėl klonų skirtumo (good)
-### Kai iš skirtingų klonų trauksim genus, galima pažiūrėti kurie vienodi, tuos tikrai siesim 
-#su POS NEG o ne su skirtumais tarp ląstelių
-
 ```
 
 
