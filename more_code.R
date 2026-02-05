@@ -75,7 +75,7 @@ ylab <- paste0("PC2 (", round(var_exp[2], 1), "%)")
 
 ggplot(pca_df, aes(x = PC1, y = PC2, color = Group, label = Barcode)) +
          geom_point(size = 4) +
-         geom_text_repel(size = 6,
+         geom_text_repel(size = 4,
                          box.padding = 1.0, 
                          point.padding = 0.8,
                          max.overlaps = Inf, 
@@ -84,13 +84,13 @@ ggplot(pca_df, aes(x = PC1, y = PC2, color = Group, label = Barcode)) +
          labs(x = xlab, y = ylab) +
          scale_color_brewer(palette = "Set1")+
          theme(legend.position = "bottom",
-         legend.text = element_text(size = 14),
-         legend.title = element_text(size = 16, face = "bold"),
-         plot.title = element_text(size = 20, face = "bold"),
-         axis.title.x = element_text(size = 18),
-         axis.title.y = element_text(size = 18),
-         axis.text.x = element_text(size = 18),
-         axis.text.y = element_text(size = 18))+
+         legend.text = element_text(size = 12),
+         legend.title = element_text(size = 14, face = "bold"),
+         plot.title = element_text(size = 18, face = "bold"),
+         axis.title.x = element_text(size = 16),
+         axis.title.y = element_text(size = 16),
+         axis.text.x = element_text(size = 16),
+         axis.text.y = element_text(size = 16))+
         coord_fixed()
 }
 

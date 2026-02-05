@@ -26,22 +26,6 @@ duomenys <- readRDS("~/NB_lncRNA/output/code/lncRNA/DataQC/data2DEG.RDS")
 list_of_4 <- duomenys[[1]]
 counts_lnc <- list_of_4[[2]]
 counts_lnc <- counts_lnc[, samples2do]
-dds <- DESeqDataSetFromMatrix(countData = round(counts_lnc), 
-                              colData = sampleInfo, 
-                              design = ~POSNEG)
-dds <- DESeq(dds)
-vsd <- vst(dds)
-mat_lnc <- assay(vsd)
-res <- results(dds) %>% as.data.table(., keep.rownames=TRUE)
-
-
-sig_lncRNAs <- subset(res, padj < 0.05 & abs(log2FoldChange) > 2)
-sig_lncRNAs <- sig_lncRNAs[order(sig_lncRNAs$padj), ]
-sig_lncRNAs$gene_id <- rownames(sig_lncRNAs)
-sig_lncRNAs <- as.data.frame(sig_lncRNAs)
-#rownames(sig_lncRNAs) <- sub("\\..*$", "", rownames(sig_lncRNAs))
-mat_filt_lnc <- mat_lnc[rownames(mat_lnc) %in% sig_lncRNAs$rn, ]
-rownames(mat_filt_lnc) <- sub("\\..*$", "", rownames(mat_filt_lnc))
 ```
 
 ```{r}
@@ -53,57 +37,99 @@ counts_pc <- list_of_4[[2]]
 counts_pc <- counts_pc[, samples2do]
 #length <- list_of_4[[3]]
 #length <- length[, samples2do]
+```
 
-dds <- DESeqDataSetFromMatrix(countData = round(counts_pc), 
-                              colData = sampleInfo, 
-                              design = ~POSNEG)
-dds <- DESeq(dds)
-vsd_pc <- vst(dds)
-mat_pc <- assay(vsd_pc)
-res_pc <- results(dds) %>% as.data.table(., keep.rownames=TRUE)
+```{r}
+library(edgeR)
+countai <- rbind(counts_lnc, counts_pc)
 
-sig <- subset(res_pc, padj < 0.05 & abs(log2FoldChange) >= 4)
-sig <- sig[order(sig$padj), ]
-sig <- as.data.frame(sig)
-mat_filt_pc <- mat_pc[rownames(mat_pc) %in% sig$rn, ]
-rownames(mat_filt_pc) <- sub("\\..*$", "", rownames(mat_filt_pc))
+Status <- factor(sampleInfo$Group, levels = c("NEG", "POS"))
+y <- DGEList(counts=countai, group=Status)
+y <- calcNormFactors(y)
+design <- model.matrix(~Status)
+
+# normalus variabilumas žmogui 0,4
+# genetiškai identiškiems 0,1
+y$common.dispersion <- 0.1
+
+fit <- glmFit(y, design)
+lrt <- glmLRT(fit, coef = "StatusPOS")
+
+top <- topTags(lrt, n=Inf)
+res <- top$table
 ```
 
 
 # Bendras mėginių ir raiškos pasižiūrėjimas
 
-## Heatmap
 ```{r}
-annotation_col <- data.frame(Group = sampleInfo$Group)
-ann_colors = list(Group = c(NEG="cyan", POS="lightpink"))
-rownames(annotation_col) <- sampleInfo$Barcode
-mat <- rbind(mat_filt_lnc, mat_filt_pc)
-pheatmap(mat,
-         scale = "row",
-         annotation_col = annotation_col,
-         annotation_colors = ann_colors,
-         show_rownames = FALSE,
-         cluster_rows = TRUE,
-         cluster_cols = TRUE,
-         main= "bendras",
-         silent = TRUE)
+res$logFC <- as.numeric(as.character(res$logFC))
+genesFC <- rownames(res)[res$logFC >= log2(3) & res$PValue < 0.05]
+logcpm <- cpm(y, log=TRUE)
+
+#atsifiltravimas
+n_lnc <- nrow(counts_lnc)
+lnc_mat <- logcpm[1:n_lnc, ]
+pc_mat  <- logcpm[(n_lnc+1):nrow(logcpm), ]
+keep_lnc <- rowSums(lnc_mat > 0) >= 2
+lnc_mat <- lnc_mat[keep_lnc, ]
+keep_pc <- rowSums(pc_mat > 1) >= 3
+pc_mat <- pc_mat[keep_pc, ]
+
+lnc_sd <- apply(lnc_mat, 1, sd)
+pc_sd  <- apply(pc_mat, 1, sd)
+
+lnc_res <- res[rownames(res) %in% names(lnc_sd), ]
+lnc_top <- lnc_res[abs(lnc_res$logFC) > 1.5 & lnc_res$PValue < 0.05, ]
+pc_res <- res[rownames(res) %in% names(pc_sd), ]
+pc_top <- pc_res[abs(pc_res$logFC) > 2 & pc_res$PValue < 0.05, ]
 ```
 
 
-## Koreliacija pagal mėginius ir PCA
+## PCA ir Heatmap
 ```{r}
-countai <- rbind(counts_lnc, counts_pc)
+gene_sd <- apply(logcpm, 1, sd)
+logcpm_var <- logcpm[gene_sd > 0.5, ]
+pca_res <- prcomp(t(logcpm_var), scale.=TRUE)
+variabilumas <- pca_res$sdev^2 / sum(pca_res$sdev^2)
+pca_df <- data.frame(
+  Sample = colnames(logcpm_var),
+  PC1 = pca_res$x[,1],
+  PC2 = pca_res$x[,2],
+  Group = sampleInfo$Group,
+  Barcode = sampleInfo$Barcode)
 
-#get_pca(mat_filt_lnc, sampleInfo) + ggtitle("tik lncRNA")
-#get_pca(mat_filt_pc, sampleInfo)+ ggtitle("tik mRNA")
-get_pca(mat, sampleInfo) + ggtitle("Bendras")
+ggplot(pca_df, aes(x=PC1, y=PC2, color=Group, label = Barcode)) +
+  geom_point(size=4) +
+  geom_text_repel(size = 4,
+  box.padding = 1.0, 
+  point.padding = 0.8,
+  max.overlaps = Inf, 
+  show.legend = FALSE)+
+  theme_bw() +
+  labs(title = "PCA of RNA-seq samples",
+    x = paste0("PC1 (", round(variabilumas[1]*100, 1), "%)"),
+    y = paste0("PC2 (", round(variabilumas[2]*100, 1), "%)"))
+```
+
+```{r}
+annotation_col <- data.frame(Group = sampleInfo$Group)
+ann_colors = list(Group = c(NEG="#54aaaa", POS="#e2a4ad"))
+rownames(annotation_col) <- sampleInfo$Barcode
+pheatmap(logcpm[genesFC,],
+         scale = "row", 
+         annotation_col = annotation_col,
+         annotation_colors = ann_colors,
+         show_rownames = FALSE,
+         cluster_rows=TRUE, 
+         cluster_cols=TRUE)
 ```
 
 
 ## Pagal raišką
 ```{r}
 # pearson sutinkama straipsniuose, bet yra kad siūlo spearman
-cor_matrix <- cor(t(mat_filt_lnc), t(mat_filt_pc), method = "spearman")
+cor_matrix <- cor(t(lnc_top), t(pc_top), method = "spearman")
 cor_df <- reshape2::melt(cor_matrix)
 colnames(cor_df) <- c("lncRNA", "mRNA", "value")
 pheatmap(cor_matrix,
@@ -116,19 +142,57 @@ pheatmap(cor_matrix,
 
 ## Stipriai koreliuojančių su lncRNA mRNA funckinė anotacija
 ```{r}
-# Pasidaryti atskirus tegiamai ir neigiamai koreliuojantiems (?)
 cor_df_sig <- subset(cor_df, abs(value) > 0.8)
-
 #sudaro klasterius
-genes <- unique(as.character(cor_df_sig$mRNA[cor_df_sig$lncRNA %in% rownames(mat_filt_lnc)]))
+genes <- unique(as.character(cor_df_sig$mRNA))
 
+genes <- sub("\\..*$","", genes)
 ego <- enrichGO(genes, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP")
 dotplot(ego, showCategory=10) + ggtitle("Koreliuojantys bendrai")
 ```
 
 
+```{r}
+#Ka darom (protingi (no) pokalbiai su savim):
+
+# padidėjusios sumažėjusios raiškos?
+## Kaip ir ne nes greičiausiai byu persidengimai (kas buvo matoma ir prieš tai)
+# Galima bandyti anotuoti lncRNA pagal tai, prie kokių modulių (su kokiu funcionalumu) prilipo
 
 
+# Ką galima iš čia dar ištraukti?
+## Galima bandyti irgi traukti modulius, bet why ???
+### Dabar moduliuose nebūtų genų, kurie pakitę dėl klonų skirtumo (good)
+### Kai iš skirtingų klonų trauksim genus, galima pažiūrėti kurie vienodi, tuos tikrai siesim 
+#su POS NEG o ne su skirtumais tarp ląstelių
+
+```
+
+
+```{r, fig.width=12}
+ego_list <- readRDS("~/NB_lncRNA/output/code/BioInsights/POS_NEG/GO_en_mod_T1.RDS")
+
+module_annotation <- do.call(
+  rbind,
+  lapply(names(ego_list), function(m) {
+    eg <- ego_list[[m]]
+    if (is.null(eg) || nrow(eg@result) == 0) return(NULL)
+
+  head(data.frame( Module = m, eg@result[, c("Description", "p.adjust")]), 3)}))
+
+module_labels <- aggregate(Description ~ Module, module_annotation, function(x) x[1])
+
+ggplot(module_annotation, aes(x = Module, y = Description, size = -log10(p.adjust), color = -log10(p.adjust))) +
+  geom_point() +
+  scale_color_viridis_c() +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title = element_blank()) +
+  labs(title = "GO Biological Process enrichment of PPI modules")
+
+#module_labels$Module <- paste0("Module_", module_labels$Module)
+#lncRNA_linked <- merge(final_hits, module_labels, by = "Module")
+```
 
 
 
