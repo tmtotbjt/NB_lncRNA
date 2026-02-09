@@ -1,6 +1,7 @@
 library(ggthemes, viridis)
 library(igraph)
 
+
 get_long <- function(z, x) {z %>%
   filter(!is.na(.data[[x]])) %>%
   separate_rows(.data[[x]], sep = ",") %>%
@@ -95,4 +96,23 @@ ggplot(pca_df, aes(x = PC1, y = PC2, color = Group, label = Barcode)) +
 }
 
 
-
+get_cor <- function(x, title= "PCA"){
+# x <- counts
+cor_mat <- cor(x)
+cor_df <- reshape2::melt(cor_mat)
+colnames(cor_df) <- c("Var1", "Var2", "value")
+ggplot(cor_df, aes(x = Var1, y = Var2, fill = value)) +
+        geom_tile(color = "white") +
+        labs(title="B", fill= " ")+
+        scale_fill_gradientn(
+        colors = c("#2626b6", "white", "#c52828"),
+        limits = c(min(cor_df$value), max(cor_df$value))) +
+        ggtitle(title)+
+        theme(
+        plot.title = element_text(size = 20, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_text(size = 16, face = "bold", angle = 90, vjust = 0.5, hjust = 1),
+        axis.text.y = element_text(size = 16, face = "bold")) +
+        coord_fixed()
+}

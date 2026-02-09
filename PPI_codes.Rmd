@@ -117,6 +117,7 @@ keep <- !is.na(new_names)
 
 pc_top_sym <- pc_top[keep, ]
 rownames(pc_top_sym) <- new_names[keep]
+#rownames(pc_top_sym) <- make.unique(new_names[keep])
 
 
 module_expr <- lapply(modules, function(genes) {
