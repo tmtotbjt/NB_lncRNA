@@ -35,8 +35,6 @@ duomenys <- readRDS("~/NB_lncRNA/input/data2DEG_protein.RDS")
 list_of_4 <- duomenys[[1]]
 counts_pc <- list_of_4[[2]]
 counts_pc <- counts_pc[, samples2do]
-#length <- list_of_4[[3]]
-#length <- length[, samples2do]
 ```
 
 ```{r}
@@ -61,7 +59,6 @@ res <- top$table
 
 
 # Bendras mėginių ir raiškos pasižiūrėjimas {.tabset}
-
 ```{r}
 res$logFC <- as.numeric(as.character(res$logFC))
 genesFC <- rownames(res)[res$logFC >= log2(3) & res$PValue < 0.05]
@@ -90,14 +87,14 @@ pc_mat_top <- pc_mat[rownames(pc_mat) %in% rownames(pc_top), ]
 
 
 ## PCA
+Mėginiai pakaniamai stipriai atsiskiria pagal POS NEG (skiriasi pagrinde dėl šio požymio)
 ```{r}
-nologcpm <- cpm(y, log=FALSE)
-gene_sd <- apply(nologcpm, 1, sd)
-nologcpm_var <- nologcpm[gene_sd > 0.5, ]
-get_pca(nologcpm_var, sampleInfo)
+gene_sd <- apply(logcpm, 1, sd)
+logcpm_var <- logcpm[gene_sd > 0.5, ]
+get_pca(logcpm_var, sampleInfo)
 ```
 
-## heatmap
+## Heatmap
 ```{r}
 annotation_col <- data.frame(Group = sampleInfo$Group)
 ann_colors = list(Group = c(NEG="#54aaaa", POS="#e2a4ad"))
@@ -112,6 +109,7 @@ pheatmap(logcpm[genesFC,],
 ```
 
 ## Koreliacija
+Mėginiai tarpusavyje skiriasi pagrinde tik dėl POS NEG
 ```{r, fig.height= 10, fig.width = 18}
 a <- get_cor(counts_lnc, title = "lncRNA")
 b <-get_cor(counts_pc, title = "mRNA")

@@ -1,0 +1,87 @@
+```{r}
+library(pacman)
+p_load(rtracklayer, GenomicRanges, dplyr, data.table, dplyr, DESeq2, ggplot2, ggrepel, tidyr, 
+      readxl, biomaRt, clusterProfiler, org.Hs.eg.db, DT, ChIPseeker, TxDb.Hsapiens.UCSC.hg38.knownGene, 
+      pheatmap, flashClust, ggraph, ComplexHeatmap, gridExtra, grid)
+knitr::opts_chunk$set(fig.width=6, fig.height=6, echo = T)
+pthres <- 0.1
+lfc <- log2(1.25)
+source("~/NB_lncRNA/code/BioInsights/more_code.R")
+```
+
+
+```{r}
+duomenys <-  readRDS("~/NB_lncRNA/output/code/lncRNA/DataQC/data2DEG.RDS")
+sampleInfo <- duomenys[[2]]
+samples2do <- c("K7Cu1", "K7Cu2", "K7c241", "K7c242", "K12Cu1", "K12Cu2", "K12c1", "K12c2")
+sampleInfo <- sampleInfo[Barcode %in% samples2do, ]
+sampleInfo$Group <- sampleInfo$Treatment
+#sampleInfo <- sampleInfo[c(3, 4, 5, 6, 1, 2, 7, 8), ]
+```
+
+```{r}
+list_of_4 <- duomenys[[1]]
+counts_lnc <- list_of_4[[2]]
+counts_lnc <- counts_lnc[, samples2do]
+
+dds <- readRDS("~/NB_lncRNA/output/code/BioInsights/dds_cur_lnc.RDS")
+vsd <- assay(vst(dds)) %>% as.data.table(., keep.rownames=TRUE) 
+
+mat <- vsd[,-1]
+mat <- as.matrix(mat)
+rownames(mat) <- vsd$rn
+
+res <- results(dds) %>% as.data.table(., keep.rownames=TRUE) 
+
+sig_lncRNAs <- subset(res, pvalue < 0.01 & abs(log2FoldChange) > 1)
+sig_lncRNAs <- sig_lncRNAs[order(sig_lncRNAs$padj), ]
+sig_lncRNAs$gene_id <- rownames(sig_lncRNAs)
+sig_lncRNAs <- as.data.frame(sig_lncRNAs)
+#rownames(sig_lncRNAs) <- sub("\\..*$", "", rownames(sig_lncRNAs))
+mat_filt_lnc <- mat[rownames(mat) %in% sig_lncRNAs$rn, ]
+rownames(mat_filt_lnc) <- sub("\\..*$", "", rownames(mat_filt_lnc))
+```
+
+```{r}
+#Protein coding
+duomenys <- readRDS("~/NB_lncRNA/input/data2DEG_protein.RDS")
+
+list_of_4 <- duomenys[[1]]
+counts_pc <- list_of_4[[2]]
+counts_pc <- counts_pc[, samples2do]
+#length <- list_of_4[[3]]
+#length <- length[, samples2do]
+
+dds <- readRDS("~/NB_lncRNA/output/code/BioInsights/dds_cur_pc.RDS")
+vsd_pc <- vst(dds)
+mat_pc <- assay(vsd_pc)
+res_pc <- results(dds) %>% as.data.table(., keep.rownames=TRUE)
+
+sig <- subset(res_pc, pvalue < 0.05 & abs(log2FoldChange) >= 2)
+sig <- sig[order(sig$padj), ]
+sig <- as.data.frame(sig)
+mat_filt_pc <- mat_pc[rownames(mat_pc) %in% sig$rn, ]
+rownames(mat_filt_pc) <- sub("\\..*$", "", rownames(mat_filt_pc))
+```
+
+
+
+# Bendras mėginių pasižiūrėjimas {.tabset}
+## PCA ir koreliacija pagal mėginius
+
+Atfiltravus pakitusios raiškos genus mėginiai atsiskiria pagal poveikio grupę.
+```{r}
+mat <- rbind(mat_filt_lnc, mat_filt_pc)
+get_pca(mat, sampleInfo) + ggtitle("Bendras")
+```
+
+Iš visų genų raiškos (ne filtruojant) matoma, jog mėginaii atsiskiria pagal kitą grupę.
+(Masiškai skiriasi pagal POSNEG grupę)
+```{r, fig.height= 10, fig.width = 18}
+countai <- rbind(counts_lnc, counts_pc)
+
+#a <- get_cor(counts_lnc, title = "lncRNA")
+#b <-get_cor(counts_pc, title = "mRNA")
+get_cor(countai, title = "Bendras")
+
+```

@@ -21,7 +21,6 @@ sampleInfo <- sampleInfo[c(7, 8, 1, 2, 5, 6, 3, 4),]
 ```{r}
 #lncRNA
 dds_list <- readRDS("~/NB_lncRNA/output/code/lncRNA/NEG_VS_POS/POS_vs_NEG.RDS")
-dge_id <- dds_list[["res"]] %>% as.data.table(., keep.rownames=TRUE) %>% .[padj <= pthres & abs(log2FoldChange) >= lfc, rn]
 res <- dds_list[["res"]]
 counts_lnc <- counts(dds_list[["dds"]]) %>% as.data.table
 vst_counts <- assay(dds_list[["vsd"]]) %>% as.data.table(., keep.rownames=TRUE) 

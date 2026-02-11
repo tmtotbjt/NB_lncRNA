@@ -1,3 +1,4 @@
+Neigiami klonai (NEG)
 ```{r}
 library(pacman)
 p_load(rtracklayer, GenomicRanges, dplyr, data.table, dplyr, DESeq2, ggplot2, ggrepel, tidyr, 
@@ -10,17 +11,15 @@ source("~/NB_lncRNA/code/BioInsights/more_code.R")
 ```
 
 ```{r}
-tmp <-  readRDS("~/NB_lncRNA/output/code/lncRNA/DataQC/data2DEG.RDS")
-sampleInfo <- tmp[[2]]
-samples2do <- c("K12Cu1", "K12Cu2", "K12c1", "K12c2")
-sampleInfo <- sampleInfo[Barcode %in% samples2do, ] 
+duomenys <- readRDS("~/NB_lncRNA/output/code/lncRNA/DataQC/data2DEG.RDS")
+sampleInfo <- duomenys[[2]]
+samples2do <- c("K7Cu1", "K7Cu2", "K7c241", "K7c242")
+sampleInfo <- sampleInfo[Barcode %in% samples2do, ]
 sampleInfo$Group <- sampleInfo$Treatment
 ```
 
 ```{r}
 #lncRNA
-duomenys <- readRDS("~/NB_lncRNA/output/code/lncRNA/DataQC/data2DEG.RDS")
-#pachekint kokie genai (ar tik lncRNA ar ir pc)
 
 list_of_4 <- duomenys[[1]]
 counts_lnc <- list_of_4[[2]]
@@ -84,14 +83,19 @@ pc_mat_top <- pc_mat[rownames(pc_mat) %in% rownames(pc_top), ]
 ```
 
 ## PCA
+Mėginiai neatsiskiria pagal tiriamą skirtumą
+Veinas Curaxin'o poveikį turintis mėginys panašesnis į kontrolinius
 ```{r}
-nologcpm <- cpm(y, log=FALSE)
-gene_sd <- apply(nologcpm, 1, sd)
-nologcpm_var <- nologcpm[gene_sd > 0.5, ]
-get_pca(nologcpm_var, sampleInfo)
+gene_sd <- apply(logcpm, 1, sd)
+logcpm_var <- logcpm[gene_sd > 0.5, ]
+get_pca(logcpm_var, sampleInfo)
 ```
 
 ## Koreliacija pagal mėginius
+Curoxin'u veikti mėginiai yra labiau paanšūs į 
+kontrolinius mėginius nei vienas į kitą
+
+Tačiau skirtumas nėra labai didelis (koreliacija ytra pakankamai aukšta; > 0,95)
 ```{r, fig.height= 10, fig.width = 18}
 countai <- rbind(counts_lnc, counts_pc)
 
@@ -103,6 +107,7 @@ a | b| c
 ```
 
 ## Heatmap
+Atsiskyrimas pagal control ir Curoxin grupes labiau pastebimas iš raiškos duomenų
 ```{r}
 annotation_col <- data.frame(Group = sampleInfo$Group)
 ann_colors = list(Group = c(Curaxin="cyan", control="lightpink"))
@@ -185,7 +190,7 @@ kegg <- enrichKEGG(gene         = entrezID,
                    pvalueCutoff = 0.05)
 kegg_proc <- as.data.frame(kegg) %>% dplyr::select(Procesai = Description)
 kegg_proc
-kegg_cat <- as.data.frame(kegg) %>% dplyr::select(Bendrao_Procesas = category)
+kegg_cat <- as.data.frame(kegg) %>% dplyr::select(Bendras_Procesas = category)
 kegg_cat
 ```
 
