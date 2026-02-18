@@ -9,7 +9,6 @@ lfc <- log2(1.25)
 source("~/NB_lncRNA/code/BioInsights/more_code.R")
 ```
 
-
 ```{r}
 duomenys <-  readRDS("~/NB_lncRNA/output/code/lncRNA/DataQC/data2DEG.RDS")
 sampleInfo <- duomenys[[2]]
@@ -24,6 +23,7 @@ list_of_4 <- duomenys[[1]]
 counts_lnc <- list_of_4[[2]]
 counts_lnc <- counts_lnc[, samples2do]
 
+
 dds <- readRDS("~/NB_lncRNA/output/code/BioInsights/dds_cur_lnc.RDS")
 vsd <- assay(vst(dds)) %>% as.data.table(., keep.rownames=TRUE) 
 
@@ -33,7 +33,7 @@ rownames(mat) <- vsd$rn
 
 res <- results(dds) %>% as.data.table(., keep.rownames=TRUE) 
 
-sig_lncRNAs <- subset(res, pvalue < 0.01 & abs(log2FoldChange) > 1)
+sig_lncRNAs <- subset(res, pvalue < 0.05 & abs(log2FoldChange) > 1.25)
 sig_lncRNAs <- sig_lncRNAs[order(sig_lncRNAs$padj), ]
 sig_lncRNAs$gene_id <- rownames(sig_lncRNAs)
 sig_lncRNAs <- as.data.frame(sig_lncRNAs)
@@ -49,15 +49,13 @@ duomenys <- readRDS("~/NB_lncRNA/input/data2DEG_protein.RDS")
 list_of_4 <- duomenys[[1]]
 counts_pc <- list_of_4[[2]]
 counts_pc <- counts_pc[, samples2do]
-#length <- list_of_4[[3]]
-#length <- length[, samples2do]
 
 dds <- readRDS("~/NB_lncRNA/output/code/BioInsights/dds_cur_pc.RDS")
 vsd_pc <- vst(dds)
 mat_pc <- assay(vsd_pc)
 res_pc <- results(dds) %>% as.data.table(., keep.rownames=TRUE)
 
-sig <- subset(res_pc, pvalue < 0.05 & abs(log2FoldChange) >= 2)
+sig <- subset(res_pc, pvalue < 0.05 & abs(log2FoldChange) >= 1.25)
 sig <- sig[order(sig$padj), ]
 sig <- as.data.frame(sig)
 mat_filt_pc <- mat_pc[rownames(mat_pc) %in% sig$rn, ]
@@ -83,5 +81,118 @@ countai <- rbind(counts_lnc, counts_pc)
 #a <- get_cor(counts_lnc, title = "lncRNA")
 #b <-get_cor(counts_pc, title = "mRNA")
 get_cor(countai, title = "Bendras")
-
 ```
+
+# Genominis kontekstas (šalia lncRNA esantys genai) {.tabset}
+lncRNA lgali reguliuoti šalia esančių genų raišą. Stebima kokie yra šalia esantys pakitę baltymą koduoajntys genai.
+
+## Šalia lncRNA esantys baltymą koduojantys genai
+```{r}
+lncGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/Curoxin_vs_Control/lncGR_Cu_Co.RDS")
+#geneGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/geneGR.RDS")
+```
+
+lncRNA genai, jų genominė padėtis ir artimiausi baltymą koduojantys kaimyniniai genai su atstumu iki jų.
+Genominė padėtis:
+
+- Antisense - persidengia su baltymą koduojančiu genu, bet priešingoje grandinėje.
+
+- Sense Overlapping - persidengia su baltymą koduojančiu genu toje pačioje grandinėje.
+
+- Bidirectional - priešingos krypties nei artimiausias baltymą koduojantis genas (šalia jo reguliacinių elementų).
+
+- Intergenic - lncRNA tarp baltymą koduojančių genų.
+
+
+Kadangi pagal poveikį atsirinktas pakankmai mažas genų skaičius, didžioji dalis lncRNA 
+(beiveik visos) yra intergeninės.
+```{r}
+#final_table <- get_near_table(lncGR, geneGR)
+final_table <- read.csv("~/NB_lncRNA/output/code/BioInsights/Curoxin_vs_Control/distance.csv")
+
+datatable(final_table, class = 'cell-border stripe', , rownames = FALSE)
+table(final_table$genomic_context)
+```
+
+```{r}
+ctx_df <- as.data.frame(table(final_table$genomic_context))
+colnames(ctx_df) <- c("genomic_context", "count")
+ggplot(ctx_df, aes(x = genomic_context, y = count, fill = genomic_context)) +
+  geom_col() +
+  geom_label(aes(label = count),
+             fill = "white",
+             color = "black",
+             size = 4,
+             label.size = 0.7,
+             show.legend = FALSE) +
+  coord_flip() +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  labs(x = "Genomic context", y = "Count", title= "Genominis kontekstas DE lncRNA") +
+  theme_minimal(base_size = 14) +
+  theme(axis.text.y = element_text(size = 15),
+        axis.title = element_text(size = 15),
+        legend.position = "none",
+        plot.title = element_text(size=15))
+```
+
+
+## Šalia lncRRNA esantys pakitę baltymą koduojantys genai
+```{r}
+geneGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/POS_NEG/geneGR.RDS")
+final_table <- final_table[final_table$nearest_protein_coding_gene %in% geneGR$gene_name, ]
+
+datatable(final_table, class = 'cell-border stripe', , rownames = FALSE)
+table(final_table$genomic_context)
+```
+
+```{r}
+ctx_df <- as.data.frame(table(final_table$genomic_context))
+colnames(ctx_df) <- c("genomic_context", "count")
+ggplot(ctx_df, aes(x = genomic_context, y = count, fill = genomic_context)) +
+  geom_col() +
+  geom_label(aes(label = count),
+             fill = "white",
+             color = "black",
+             size = 4,
+             label.size = 0.7,
+             show.legend = FALSE) +
+  coord_flip() +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  labs(x = "Genomic context", y = "Count", title= "Genominis kontekstas DE lncRNA") +
+  theme_minimal(base_size = 14) +
+  theme(axis.text.y = element_text(size = 15),
+        axis.title = element_text(size = 15),
+        legend.position = "none",
+        plot.title = element_text(size=15))
+```
+
+# Koreliacija pagal raišką {.tabset}
+Matoma, jog yra tarpusavyje koreliuojančių lncRNA su mRNA (matomas grupių susidarymas)
+```{r}
+cor_matrix <- cor(t(mat_filt_lnc), t(mat_filt_pc), method = "spearman")
+cor_df <- reshape2::melt(cor_matrix)
+colnames(cor_df) <- c("lncRNA", "mRNA", "value")
+pheatmap(cor_matrix,
+         clustering_distance_rows = "euclidean",
+         clustering_distance_cols = "euclidean",
+         show_rownames = FALSE,
+         show_colnames = FALSE)
+```
+
+
+## Stipriai koreliuojančių su lncRNA mRNA funckinė anotacija
+```{r}
+cor_df_sig <- subset(cor_df, abs(value) > 0.75)
+
+genes <- unique(as.character(cor_df_sig$mRNA))
+genes <- sub("\\..*$","", genes)
+
+ego <- enrichGO(genes, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP")
+dotplot(ego, showCategory=10) + ggtitle("Koreliuojantys bendrai")
+```
+
+
+```{r}
+# moduliai neišėjo (Stipriai nepatikimi ir mažai)
+```
+

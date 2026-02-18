@@ -116,3 +116,52 @@ ggplot(cor_df, aes(x = Var1, y = Var2, fill = value)) +
         axis.text.y = element_text(size = 16, face = "bold")) +
         coord_fixed()
 }
+
+
+get_near_table <- function(lncGR, geneGR){
+nearest_idx <- nearest(lncGR, geneGR)
+nearest_gene <- geneGR$gene_name[nearest_idx]
+distance_to_pc <- distance(lncGR, geneGR[nearest_idx])
+genomic_context <- rep("intergenic", length(lncGR))
+
+gene_upstream <- promoters(geneGR, upstream=1500, downstream=0)
+hits <- findOverlaps(lncGR, gene_upstream, ignore.strand=FALSE)
+qh <- queryHits(hits)
+sh <- subjectHits(hits)
+
+lnc_strand <- as.character(strand(lncGR[qh]))
+gene_strand <- as.character(strand(geneGR[sh]))
+lnc_tss <- start(lncGR[qh])
+gene_tss <- ifelse(gene_strand == "+", start(geneGR[sh]), end(geneGR[sh]))
+bidir_hit <- (gene_strand == "+" & lnc_tss < gene_tss & (gene_tss - lnc_tss) <= 2000) |
+                        (gene_strand == "-" & lnc_tss > gene_tss & (lnc_tss - gene_tss) <= 2000)
+bidir <- unique(qh[bidir_hit])
+genomic_context[bidir] <- "bidirectional"
+
+
+hits <- findOverlaps(lncGR, geneGR, ignore.strand=TRUE)
+qh <- queryHits(hits)
+sh <- subjectHits(hits)
+lnc_strand <- as.character(strand(lncGR[qh]))
+gene_strand <- as.character(strand(geneGR[sh]))
+
+close_to_gene <- distance_to_pc[qh] <= 10000
+is_antisense_hit <- (lnc_strand != gene_strand) & close_to_gene
+antisense_idx <- setdiff(unique(qh[is_antisense_hit]), bidir)
+genomic_context[antisense_idx] <- "antisense"
+
+is_sense_hit <- lnc_strand == gene_strand
+sense_idx <- setdiff(unique(qh[is_sense_hit]), c(bidir, antisense_idx))
+genomic_context[sense_idx] <- "sense_overlapping"
+
+final_table <- data.frame(
+  lncRNA = lncGR$gene_name,
+  genomic_context = genomic_context,
+  nearest_protein_coding_gene = nearest_gene,
+  distance = distance_to_pc)
+final_table <- final_table[!duplicated(final_table[c("lncRNA", "nearest_protein_coding_gene", "distance")]), ]
+final_table <- final_table %>%
+  group_by(lncRNA, nearest_protein_coding_gene) %>%
+  slice_min(distance) %>%
+  ungroup()
+}

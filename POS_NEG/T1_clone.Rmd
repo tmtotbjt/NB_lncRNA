@@ -143,30 +143,6 @@ ego <- enrichGO(genes, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP")
 dotplot(ego, showCategory=10) + ggtitle("Koreliuojantys bendrai")
 ```
 
-```{r, fig.width=12}
-ego_list <- readRDS("~/NB_lncRNA/output/code/BioInsights/POS_NEG/GO_en_mod_T1.RDS")
-
-module_annotation <- do.call(
-  rbind,
-  lapply(names(ego_list), function(m) {
-    eg <- ego_list[[m]]
-    if (is.null(eg) || nrow(eg@result) == 0) return(NULL)
-
-  head(data.frame( Module = m, eg@result[, c("Description", "p.adjust")]), 3)}))
-
-module_labels <- aggregate(Description ~ Module, module_annotation, function(x) x[1])
-
-ggplot(module_annotation, aes(x = Module, y = Description, size = -log10(p.adjust), color = -log10(p.adjust))) +
-  geom_point() +
-  scale_color_viridis_c() +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.title = element_blank()) +
-  labs(title = "GO Biological Process enrichment of PPI modules")
-
-#module_labels$Module <- paste0("Module_", module_labels$Module)
-#lncRNA_linked <- merge(final_hits, module_labels, by = "Module")
-```
 
 
 
