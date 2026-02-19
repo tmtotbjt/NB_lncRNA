@@ -202,7 +202,7 @@ lncRNA lgali reguliuoti šalia esančių genų raišą. Stebima kokie yra šalia
 ## Šalia lncRNA esantys baltymą koduojantys genai
 ```{r}
 lncGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/Oxygen/lncGR.RDS") #padarytas su siglncRNAs
-geneGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/geneGR.RDS")
+#geneGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/geneGR.RDS")
 ```
 lncRNA genai, jų genominė padėtis ir artimiausi baltymą koduojantys kaimyniniai genai su atstumu iki jų.
 Genominė padėtis:
@@ -244,8 +244,9 @@ go_res <- enrichGO(gene = cis_gene_names,
                    OrgDb = org.Hs.eg.db,
                    keyType = "ENSEMBL",
                    ont = "BP",
-                   pvalueCutoff = 0.1)
-dotplot(go_res)
+                   pvalueCutoff = 0.05)
+go_res <- as.data.frame(go_res) %>% dplyr::select(Procesai = Description)
+go_res
 ```
 
 

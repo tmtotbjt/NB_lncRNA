@@ -1,3 +1,5 @@
+Normox Control (Batimastat vs Control Normox salygomis)
+
 ```{r}
 library(pacman)
 p_load(rtracklayer, GenomicRanges, dplyr, data.table, dplyr, DESeq2, ggplot2, ggrepel, tidyr, 
@@ -12,36 +14,37 @@ source("~/NB_lncRNA/code/BioInsights/more_code.R")
 ```{r}
 tmp <-  readRDS("~/NB_lncRNA/output/code/lncRNA/DataQC/data2DEG.RDS")
 sampleInfo <- tmp[[2]]
-samples2do <- c("NeNR1", "NeNR2", "T1cN1", "T1cN2","K12c1", "K12c2", "K7cN1", "K7cN2")
+samples2do <- c("T1cN1", "T1cN2", "T1N1", "T1N2", "K7N1", "K7N2", "K7cN1", "K7cN2")
 sampleInfo <- sampleInfo[Barcode %in% samples2do, ] 
-sampleInfo$Group <- sampleInfo$POSNEG
-sampleInfo <- sampleInfo[c(7, 8, 1, 2, 5, 6, 3, 4),]
+sampleInfo$Group <- sampleInfo$Treatment
 ```
-
 ```{r}
 DT::datatable(sampleInfo[, .(sample, Group)], class = 'cell-border stripe')
 ```
 
 ```{r}
-#lncRNA
-dds_list <- readRDS("~/NB_lncRNA/output/code/lncRNA/NEG_VS_POS/POS_vs_NEG.RDS")
-res <- dds_list[["res"]]
-counts_lnc <- counts(dds_list[["dds"]]) %>% as.data.table
-vst_counts <- assay(dds_list[["vsd"]]) %>% as.data.table(., keep.rownames=TRUE) 
-rownames(counts_lnc) <- vst_counts$rn
-mat <- vst_counts[,-1]
+list_of_4 <- tmp[[1]]
+counts_lnc <- list_of_4[[2]]
+counts_lnc <- counts_lnc[, samples2do]
+
+dds <- readRDS("~/NB_lncRNA/output/code/BioInsights/Bastimat/dds_lnc_NBC.RDS")
+vsd <- assay(vst(dds)) %>% as.data.table(., keep.rownames=TRUE) 
+
+mat <- vsd[,-1]
 mat <- as.matrix(mat)
-rownames(mat) <- vst_counts$rn
+rownames(mat) <- vsd$rn
 
+res <- results(dds) %>% as.data.table(., keep.rownames=TRUE) 
 
-sig_lncRNAs <- subset(res, padj < 0.05 & abs(log2FoldChange) > 1.25)
+sig_lncRNAs <- subset(res, pvalue < 0.01 & abs(log2FoldChange) > 1.25)
 sig_lncRNAs <- sig_lncRNAs[order(sig_lncRNAs$padj), ]
 sig_lncRNAs$gene_id <- rownames(sig_lncRNAs)
 sig_lncRNAs <- as.data.frame(sig_lncRNAs)
 #rownames(sig_lncRNAs) <- sub("\\..*$", "", rownames(sig_lncRNAs))
-mat_filt_lnc <- mat[rownames(mat) %in% rownames(sig_lncRNAs), ]
+mat_filt_lnc <- mat[rownames(mat) %in% sig_lncRNAs$rn, ]
 rownames(mat_filt_lnc) <- sub("\\..*$", "", rownames(mat_filt_lnc))
 ```
+
 ```{r}
 #Protein coding
 duomenys <- readRDS("~/NB_lncRNA/input/data2DEG_protein.RDS")
@@ -49,18 +52,13 @@ duomenys <- readRDS("~/NB_lncRNA/input/data2DEG_protein.RDS")
 list_of_4 <- duomenys[[1]]
 counts_pc <- list_of_4[[2]]
 counts_pc <- counts_pc[, samples2do]
-#length <- list_of_4[[3]]
-#length <- length[, samples2do]
 
-dds <- DESeqDataSetFromMatrix(countData = round(counts_pc), 
-                              colData = sampleInfo, 
-                              design = ~Group)
-dds <- DESeq(dds)
+dds <- readRDS("~/NB_lncRNA/output/code/BioInsights/Bastimat/dds_pc_NBC.RDS")
 vsd_pc <- vst(dds)
 mat_pc <- assay(vsd_pc)
 res_pc <- results(dds) %>% as.data.table(., keep.rownames=TRUE)
 
-sig <- subset(res_pc, padj < 0.05 & abs(log2FoldChange) >= 2)
+sig <- subset(res_pc, pvalue < 0.05 & abs(log2FoldChange) >= 2)
 sig <- sig[order(sig$padj), ]
 sig <- as.data.frame(sig)
 mat_filt_pc <- mat_pc[rownames(mat_pc) %in% sig$rn, ]
@@ -68,11 +66,10 @@ rownames(mat_filt_pc) <- sub("\\..*$", "", rownames(mat_filt_pc))
 ```
 
 # Bendras mėginių pasižiūrėjimas {.tabset}
-Kaip kinta mRNA ir lncRNA tarp mėginių (ar yra atsiskyrimas pagal abu)
 ## Heatmap
 ```{r}
 annotation_col <- data.frame(Group = sampleInfo$Group)
-ann_colors = list(Group = c(NEG="cyan", POS="lightpink"))
+ann_colors = list(Group = c(Batimastat="cyan", control="lightpink"))
 p1 <- pheatmap(mat_filt_pc,
          scale = "row",
          annotation_col = annotation_col,
@@ -93,9 +90,6 @@ p2 <- pheatmap(mat_filt_lnc,
          main= "lncRNA",
          silent = TRUE)
 ```
-
-Bendrai mėginiai atsiskiria pagal POS ir NEG grupes, bet is mRNR (ir šiek tiek iš lncRNA) šilumos žemėlapio matoma,
-jog yra atsiskyrimas tarp skirtingų klonų. Pastebima ir bendrame (su mRNA ir lncRNA)
 
 ```{r, fig.height = 7, fig.width=18}
 rownames(annotation_col) <- sampleInfo$Barcode
@@ -118,51 +112,34 @@ gridExtra::grid.arrange(g1, g2, g3, ncol = 3)
 ```
 
 ## Koreliacija pagal mėginius
-Mėginiai atsiskiria į POS NEG grupės analizuojant tik lncRNA. 
-mRNA ir bendoroje (kartu su lncRNA) Atsiskyrimas matomas, bet T1 POS mėginiai panašumu linksta link NEG mėginių
-(koreliuoja labiau su NEG meginiais negu su POS)
 
 ```{r, fig.height= 10, fig.width = 18}
 countai <- rbind(counts_lnc, counts_pc)
-countai_PosNeg <- countai[, c(1, 2, 5, 6, 3, 4, 7, 8)]
-counts_lnc_PosNeg <- counts_lnc[, c(1, 2, 5, 6, 3, 4, 7, 8)]
-counts_pc_PosNeg <- counts_pc[, c(1, 2, 5, 6, 3, 4, 7, 8)]
 
-a <- get_cor(counts_lnc_PosNeg, title = "lncRNA")
-b <-get_cor(counts_pc_PosNeg, title = "mRNA")
-c <-get_cor(countai_PosNeg, title = "Bendras")
+a <- get_cor(counts_lnc, title = "lncRNA")
+b <-get_cor(counts_pc, title = "mRNA")
+c <-get_cor(countai, title = "Bendras")
 
-a | b| c
+a|b|c
 ```
 
 ## PCA
-Pastebimas atsirymas tarp POS ir NEG grupių. Taip pat matomas atsiskyrimas teigiamoje grupėje
-tarp klonų. T1 linksta panašumju link NEG mėginių (PC2)
+
 ```{r}
 #get_pca(mat_filt_lnc, sampleInfo) + ggtitle("tik lncRNA")
 #get_pca(mat_filt_pc, sampleInfo)+ ggtitle("tik mRNA")
 get_pca(mat, sampleInfo) + ggtitle("Bendras")
+
 ```
 
-# Bendrai enrichment {.tabset}
-## lncRNA enrichment
-lncRNA praturtinimas rodo bendrai, jog reguliuoja genų raišką
-(jungimasis su miRNA, RNR, baltymais/dalyvauja baltymų kompleksų susidaryme) 
+# Pakitę baltymą koduojantys genai
+
 ```{r}
 sig_lnc_up <- subset(sig_lncRNAs, padj < 0.05 & log2FoldChange > 1)
 sig_lnc_down <- subset(sig_lncRNAs, padj < 0.05 & log2FoldChange < -1)
 sig_pc_up <- subset(sig, padj < 0.05 & log2FoldChange >= log2(2))
 sig_pc_down <- subset(sig, padj < 0.05 & log2FoldChange <= (-1)*log2(2))
-
-
-gene_list <- sub("\\..*$", "", rownames(sig_lncRNAs))
-go_enrich <- enrichGO(gene_list, OrgDb="org.Hs.eg.db", keyType="ENSEMBL")
-
-go_enrich <- as.data.frame(go_enrich) %>% dplyr::select(Procesai = Description)
-go_enrich
 ```
-
-## Pakitę baltymą koduojantys genai
 
 ```{r, fig.width=12}
 pc_names <- rownames(mat_pc)
@@ -190,36 +167,6 @@ ego <- enrichGO(gene          = rownames(sig_pc_down),
 d <- dotplot(ego, showCategory=10) + ggtitle("GO sumažėjusios raiškos")
 
 c|d
-
-ensembl_ids <-  rownames(sig_pc_up)
-entrezID <- mapIds(
-  org.Hs.eg.db,
-  keys = ensembl_ids,
-  column = "ENTREZID",
-  keytype = "ENSEMBL",
-  multiVals = "first")
-
-entrezID <- na.omit(entrezID)
-kegg <- enrichKEGG(gene         = entrezID,
-                   organism     = 'hsa',
-                   pvalueCutoff = 0.05)
-a <- dotplot(kegg, showCategory=10) +ggtitle("KEGG su padidėjusios raiškos genais")
-
-ensembl_ids <-  rownames(sig_pc_down)
-entrezID <- mapIds(
-  org.Hs.eg.db,
-  keys = ensembl_ids,
-  column = "ENTREZID",
-  keytype = "ENSEMBL",
-  multiVals = "first")
-
-entrezID <- na.omit(entrezID)
-kegg <- enrichKEGG(gene         = entrezID,
-                   organism     = 'hsa',
-                   pvalueCutoff = 0.05)
-b <- dotplot(kegg, showCategory=10) +ggtitle("KEGG su sumažėjusios raiškos genais")
-
-a | b
 ```
 
 # Genominis kontekstas (šalia lncRNA esantys genai) {.tabset}
@@ -228,7 +175,7 @@ lncRNA lgali reguliuoti šalia esančių genų raišą. Stebima kokie yra šalia
 
 ## Šalia lncRNA esantys baltymą koduojantys genai
 ```{r}
-lncGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/POS_NEG/lncGR.RDS") #padarytas su siglncRNAs
+lncGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/Bastimat/lncGR_NBC.RDS") #padarytas su siglncRNAs
 #geneGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/geneGR.RDS")
 ```
 lncRNA genai, jų genominė padėtis ir artimiausi baltymą koduojantys kaimyniniai genai su atstumu iki jų.
@@ -243,43 +190,21 @@ Genominė padėtis:
 - Intergenic - lncRNA tarp baltymą koduojančių genų.
 ```{r}
 #final_table <- get_near_table(lncGR, geneGR)
-final_table <- read.csv("~/NB_lncRNA/output/code/BioInsights/POS_NEG/distance.csv")
+final_table <- read.csv("~/NB_lncRNA/output/code/BioInsights/Bastimat/distance_NBC.csv")
 table(final_table$genomic_context)
 ```
 
 ## Šalia lncRRNA esantys pakitę baltymą koduojantys genai
 ```{r}
-geneGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/POS_NEG/geneGR.RDS")
+geneGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/Bastimat/geneGR_NBC.RDS")
 final_table <- final_table[final_table$nearest_protein_coding_gene %in% geneGR$gene_name, ]
 
 datatable(final_table, class = 'cell-border stripe', , rownames = FALSE)
 table(final_table$genomic_context)
 ```
 
-```{r}
-ctx_df <- as.data.frame(table(final_table$genomic_context))
-colnames(ctx_df) <- c("genomic_context", "count")
-ggplot(ctx_df, aes(x = genomic_context, y = count, fill = genomic_context)) +
-  geom_col() +
-  geom_label(aes(label = count),
-             fill = "white",
-             color = "black",
-             size = 4,
-             label.size = 0.7,
-             show.legend = FALSE) +
-  coord_flip() +
-  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
-  labs(x = "Genomic context", y = "Count", title= "Genominis kontekstas DE lncRNA") +
-  theme_minimal(base_size = 14) +
-  theme(axis.text.y = element_text(size = 15),
-        axis.title = element_text(size = 15),
-        legend.position = "none",
-        plot.title = element_text(size=15))
-```
-
 
 ## Šalia (100kb) lncRNA esančių baltymą koduojančių GO enrichment
-Šalia lncRNA esantys pakitę baltymą koduoajntys genai susiję su sinapsių organizacija, struktūra ar aktyvumu.
 ```{r}
 # Artimiausi genai (cis, within 100kb)
 # cituojant D Avalos (2023) — For distances between 50 kb and 1Mb between co-expressed gene pairs
@@ -292,7 +217,7 @@ go_res <- enrichGO(gene = cis_gene_names,
                    OrgDb = org.Hs.eg.db,
                    keyType = "ENSEMBL",
                    ont = "BP",
-                   pvalueCutoff = 0.15)
+                   pvalueCutoff = 0.052)
 go_res <- as.data.frame(go_res) %>% dplyr::select(Procesai = Description)
 go_res
 ```
@@ -300,9 +225,7 @@ go_res
 
 # Koreliacija {.tabset}
 ## Pagal raišką
-Pagrinde matomi du klasteriai, kur didžioji dalis koreliuoja teigiamai.
-Taip pat pastebimi smulkesni kalsteriai.
-Gali būti stebimi klasteriai, kurie atsirado ne dėl POS NEG skirtumų, bet dėl skirtumų tarp kolnų.
+
 ```{r}
 cor_matrix <- cor(t(mat_filt_lnc), t(mat_filt_pc), method = "spearman")
 cor_df <- reshape2::melt(cor_matrix)
@@ -315,8 +238,7 @@ pheatmap(cor_matrix,
 ```
 
 
-## Stipriai koreliuojančių su lncRNA mRNA funckinė anotacija {.tabset}
-### Lyginant abu ląstelių klonus kartu
+## Stipriai koreliuojančių su lncRNA mRNA funckinė anotacija
 ```{r}
 # Pasidaryti atskirus tegiamai ir neigiamai koreliuojantiems (?)
 cor_df_sig <- subset(cor_df, abs(value) > 0.85)
@@ -327,63 +249,18 @@ rownames(sig_lnc_down) <- sub("\\..*$", "", rownames(sig_lnc_down))
 #sudaro klasterius
 genes <- unique(as.character(cor_df_sig$mRNA[cor_df_sig$lncRNA %in% rownames(mat_filt_lnc)]))
 ```
-Koreliuojantys su lncRNA susiję su:
 
-- Ląstelės membrana (potencialo reguliacija, medžiagų transportas)
-
-- Ląstelių tarpusavio sąveika (jungimasis, adhezija)
-
-- Kraujotakos sistema (kraujotakos reguliacija, širdies susitraukimas)
 ```{r}
 ego <- enrichGO(genes, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP")
 dotplot(ego, showCategory=10) + ggtitle("Koreliuojantys bendrai")
 ```
 
 
-```{r}
-# genes_pP <- cor_df_sig$mRNA[cor_df_sig$lncRNA %in% rownames(sig_lnc_up) & cor_df_sig$mRNA %in% rownames(sig_pc_up)]
-# genes_sP <- cor_df_sig$mRNA[cor_df_sig$lncRNA %in% rownames(sig_lnc_down) & cor_df_sig$mRNA %in% rownames(sig_pc_up)]
-# genes_pS <- cor_df_sig$mRNA[cor_df_sig$lncRNA %in% rownames(sig_lnc_up) & cor_df_sig$mRNA %in% rownames(sig_pc_down)]
-# genes_sS <- cor_df_sig$mRNA[cor_df_sig$lncRNA %in% rownames(sig_lnc_down) & cor_df_sig$mRNA %in% rownames(sig_pc_down)]
-
-# lenetlė su main lncRNA ar mRNA
-# dotplots GO atskiri
-```
-
-### Atskirai tarp klonų sudarius koreliacijas
-Atskirai atsifiltravus koreliuojančias mRNA su lncRNA klonuose.
-Daroma prielaida, jog atsirinkus vienodas korliacijas iš skirtingų klonų, 
-atrenkamos tie koreliuojantys kompinentai, kurie skiriasi ir koreliuoja dėl POS NEG o ne dėl klonų skirtumų
-```{r}
-cor_df_T1 <- readRDS("~/NB_lncRNA/output/code/BioInsights/POS_NEG/cor_df_T1.RDS")
-cor_df_K7 <- readRDS("~/NB_lncRNA/output/code/BioInsights/POS_NEG/cor_df_K7.RDS")
-cor_sig_T1 <- subset(cor_df_T1, abs(value) > 0.8)
-cor_sig_K7 <- subset(cor_df_K7, abs(value) > 0.8)
-
-poros_T <- cor_sig_T1[, c("lncRNA", "mRNA")]
-poros_K <- cor_sig_K7[, c("lncRNA", "mRNA")]
-
-common_pairs <- inner_join(poros_T, poros_K, by = c("lncRNA", "mRNA"))
-unique_pc <- unique(common_pairs$mRNA)
-unique_pc <- sub("\\..*$", "", unique_pc)
-```
-
-Atfiltruoti koreliuojantys genai susiję su:
-
-- Membrana (medžiagų pernaša, potencialas)
-
-- Nervų sistema (sąmonę, mokymasis, sinapsėm)
-
-- Kraujotakos sistema (kraujotakos reguliavimas)
-
-```{r}
-ego <- enrichGO(unique_pc, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP")
-dotplot(ego, showCategory=10) + ggtitle("Atskirų koreliacijų GO")
-```
-
 # Protein-protein interaction network construction, module analysis
-```{r, fig.width=12, fig.height=8}
-ego_list <- readRDS("~/NB_lncRNA/output/code/BioInsights/POS_NEG/GO_enrichment_all_modules.RDS")
+Sąveikaujančių baltymų grupių anotacijos.
+
+```{r, fig.width=10}
+ego_list <- readRDS("~/NB_lncRNA/output/code/BioInsights/Bastimat/GO_en_mod_NBC.RDS")
 
 module_annotation <- do.call(
   rbind,
