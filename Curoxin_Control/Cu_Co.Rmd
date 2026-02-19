@@ -15,7 +15,9 @@ sampleInfo <- duomenys[[2]]
 samples2do <- c("K7Cu1", "K7Cu2", "K7c241", "K7c242", "K12Cu1", "K12Cu2", "K12c1", "K12c2")
 sampleInfo <- sampleInfo[Barcode %in% samples2do, ]
 sampleInfo$Group <- sampleInfo$Treatment
-#sampleInfo <- sampleInfo[c(3, 4, 5, 6, 1, 2, 7, 8), ]
+```
+```{r}
+DT::datatable(sampleInfo[, .(sample, Treatment, POSNEG)], class = 'cell-border stripe')
 ```
 
 ```{r}
@@ -63,9 +65,7 @@ rownames(mat_filt_pc) <- sub("\\..*$", "", rownames(mat_filt_pc))
 ```
 
 
-
 # Bendras mėginių pasižiūrėjimas {.tabset}
-
 ## Heatmap
 ```{r}
 annotation_col <- data.frame(Group = sampleInfo$Group)
@@ -91,8 +91,6 @@ p2 <- pheatmap(mat_filt_lnc,
          silent = TRUE)
 ```
 
-Bendrai mėginiai atsiskiria pagal POS ir NEG grupes, bet is mRNR (ir šiek tiek iš lncRNA) šilumos žemėlapio matoma,
-jog yra atsiskyrimas tarp skirtingų klonų. Pastebima ir bendrame (su mRNA ir lncRNA)
 
 ```{r, fig.height = 7, fig.width=18}
 rownames(annotation_col) <- sampleInfo$Barcode
@@ -132,6 +130,74 @@ c <- get_cor(countai, title = "Bendras")
 a | b| c
 ```
 
+# Pakitę baltymą koduojantys genai
+
+```{r}
+sig_lnc_up <- subset(sig_lncRNAs, padj < 0.05 & log2FoldChange > 1)
+sig_lnc_down <- subset(sig_lncRNAs, padj < 0.05 & log2FoldChange < -1)
+sig_pc_up <- subset(sig, padj < 0.05 & log2FoldChange >= log2(2))
+sig_pc_down <- subset(sig, padj < 0.05 & log2FoldChange <= (-1)*log2(2))
+```
+
+```{r, fig.width=12}
+pc_names <- rownames(mat_pc)
+rownames(sig_pc_up) <- sub("\\..*$", "", sig_pc_up$rn)
+pc_names <- sub("\\..*$", "", pc_names)
+ego <- enrichGO(gene          = rownames(sig_pc_up),
+                universe      = pc_names,
+                OrgDb         = "org.Hs.eg.db",
+                ont           = "BP",
+                pAdjustMethod = "none",
+                pvalueCutoff  = 0.05,
+                keyType       = "ENSEMBL",
+                readable      = TRUE)
+c <- dotplot(ego, showCategory=10) + ggtitle("GO padidėjusios raiškos")
+
+rownames(sig_pc_down) <- sub("\\..*$", "", sig_pc_down$rn)
+ego <- enrichGO(gene          = rownames(sig_pc_down),
+                universe      = pc_names,
+                OrgDb         = "org.Hs.eg.db",
+                ont           = "BP",
+                pAdjustMethod = "none",
+                pvalueCutoff  = 0.05,
+                key           = "ENSEMBL",
+                readable      = TRUE)
+d <- dotplot(ego, showCategory=10) + ggtitle("GO sumažėjusios raiškos")
+
+c|d
+
+ensembl_ids <-  rownames(sig_pc_up)
+entrezID <- mapIds(
+  org.Hs.eg.db,
+  keys = ensembl_ids,
+  column = "ENTREZID",
+  keytype = "ENSEMBL",
+  multiVals = "first")
+
+entrezID <- na.omit(entrezID)
+kegg <- enrichKEGG(gene         = entrezID,
+                   organism     = 'hsa',
+                   pvalueCutoff = 0.05)
+a <- dotplot(kegg, showCategory=10) +ggtitle("KEGG su padidėjusios raiškos genais")
+
+ensembl_ids <-  rownames(sig_pc_down)
+entrezID <- mapIds(
+  org.Hs.eg.db,
+  keys = ensembl_ids,
+  column = "ENTREZID",
+  keytype = "ENSEMBL",
+  multiVals = "first")
+
+entrezID <- na.omit(entrezID)
+kegg <- enrichKEGG(gene         = entrezID,
+                   organism     = 'hsa',
+                   pvalueCutoff = 0.05)
+b <- dotplot(kegg, showCategory=10) +ggtitle("KEGG su sumažėjusios raiškos genais")
+
+a | b
+```
+
+
 # Genominis kontekstas (šalia lncRNA esantys genai) {.tabset}
 lncRNA lgali reguliuoti šalia esančių genų raišą. Stebima kokie yra šalia esantys pakitę baltymą koduoajntys genai.
 
@@ -169,6 +235,25 @@ final_table <- final_table[final_table$nearest_protein_coding_gene %in% geneGR$g
 
 datatable(final_table, class = 'cell-border stripe', , rownames = FALSE)
 table(final_table$genomic_context)
+```
+
+## Šalia (100kb) lncRNA esančių baltymą koduojančių GO enrichment
+```{r}
+# Artimiausi genai (cis, within 100kb)
+# cituojant D Avalos (2023) — For distances between 50 kb and 1Mb between co-expressed gene pairs
+nearest_genes <- distanceToNearest(lncGR, geneGR)
+cis_genes <- geneGR[subjectHits(nearest_genes)][mcols(nearest_genes)$distance <= 50000]
+cis_gene_names <- unique(cis_genes$gene_id)
+cis_gene_names <- sub("\\..*$", "", cis_gene_names)
+
+go_res <- enrichGO(gene = cis_gene_names,
+                   universe = pc_names,
+                   OrgDb = org.Hs.eg.db,
+                   keyType = "ENSEMBL",
+                   ont = "BP",
+                   pvalueCutoff = 0.05)
+go_res <- as.data.frame(go_res) %>% dplyr::select(Procesai = Description)
+go_res
 ```
 
 # Koreliacija pagal raišką {.tabset}
