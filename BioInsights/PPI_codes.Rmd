@@ -1,5 +1,5 @@
 ```{r}
-# Protein-Protein Interaction nagrinėti + per koreliacijas prie susidariųsių genų grupių pridėti lncRNA
+# Protein-Protein Interaction (Baltymo-Baltymo sąveikas) nagrinėti + per koreliacijas prie susidariųsių genų grupių pridėti lncRNA
 # Kodas didesniems setams (bent 8 mėginiai)
 # Pakaita populiariam WGCNA (jam reikia 15 mėginių)
 
@@ -10,6 +10,7 @@
 
 # GRanges
 ```{r}
+# Jeigu reiktų keisti (mažinti)
 sig_lncRNAs <- subset(res, padj < 0.05 & abs(log2FoldChange) > 2)
 sig_lncRNAs <- sig_lncRNAs[order(sig_lncRNAs$padj), ]
 sig_lncRNAs$gene_id <- rownames(sig_lncRNAs)
@@ -43,7 +44,7 @@ lncGR <- GRanges(
 lncGR <- lncGR[lncGR$gene_id %in% sig_lncRNAs$rn, ]
 
 ### pasikeisk pav
-#saveRDS(lncGR, "~/NB_lncRNA/output/code/BioInsights/Curoxin_vs_Control/.RDS")
+#saveRDS(lncGR, "~/NB_lncRNA/output/code/BioInsights//lncGR.RDS")
 ### pasikeisk pav
 
 
@@ -57,22 +58,9 @@ geneGR <- GRanges(
 geneGR <- geneGR[geneGR$gene_id %in% sig$rn, ]
 
 ### pasikeisk pav
-#saveRDS(geneGR, "~/NB_lncRNA/output/code/BioInsights/Curoxin_vs_Control/.RDS")
+#saveRDS(geneGR, "~/NB_lncRNA/output/code/BioInsights//geneGR.RDS")
 ### pasikeisk pav
 ```
-
-
-# Koreliuojantys geani, kurių raiška ssumažėjusi/padidėjusi (Ne PPI)
-```{r, eval = F, echo = F}
-ego_p <- enrichGO(unique_p, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP")
-dotplot(ego_p, showCategory=3) + ggtitle("Unique GO padidėjusios raiškos")
-
-ego_s <- enrichGO(unique_s, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP")
-dotplot(ego_s, showCategory=10) + ggtitle("Unique GO sumažėjusios raiškos")
-```
-
-
-
 
 
 # PPI Network and identification of hub lncRNAs
@@ -119,7 +107,7 @@ ppi <- data.frame(
   Gene   = unlist(modules))
 
 ### pasikeisk pav
-write.csv(ppi, "~/NB_lncRNA/output/code/BioInsights/POS_NEG/PPI_modules.csv", row.names = FALSE)
+#write.csv(ppi, "~/NB_lncRNA/output/code/BioInsights//PPI_modules.csv", row.names = FALSE)
 ### pasikeisk pav
 ```
 
@@ -205,7 +193,7 @@ final_hits <- subset(results_prefilt, abs(rho) >= 0.7 & perm_pval < 0.01) #0,01
 final_hits <- final_hits[order(-abs(final_hits$rho)), ]
 
 ### pasikeisk pav
-saveRDS(final_hits, "~/NB_lncRNA/output/code/BioInsights/POS_NEG/POSvsNEG.RDS")
+#saveRDS(final_hits, "~/NB_lncRNA/output/code/BioInsights//hits.RDS")
 ### pasikeisk pav
 ```
 
@@ -231,7 +219,7 @@ ego_list <- lapply(names(module_entrez), function(m) {
 names(ego_list) <- names(module_entrez)
 
 ### pasikeisk pav
-saveRDS(ego_list, "~/NB_lncRNA/output/code/BioInsights/POS_NEG/GO_enrichment_all_modules.RDS")
+#saveRDS(ego_list, "~/NB_lncRNA/output/code/BioInsights//GO_en_mod.RDS")
 ### pasikeisk pav
 ```
 
