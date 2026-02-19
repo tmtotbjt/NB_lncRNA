@@ -65,8 +65,56 @@ rownames(mat_filt_pc) <- sub("\\..*$", "", rownames(mat_filt_pc))
 
 
 # Bendras mėginių pasižiūrėjimas {.tabset}
-## PCA ir koreliacija pagal mėginius
 
+## Heatmap
+```{r}
+annotation_col <- data.frame(Group = sampleInfo$Group)
+ann_colors = list(Group = c(Curaxin="cyan", control="lightpink"))
+p1 <- pheatmap(mat_filt_pc,
+         scale = "row",
+         annotation_col = annotation_col,
+         annotation_colors = ann_colors,
+         show_rownames = FALSE,
+         cluster_rows = TRUE,
+         cluster_cols = TRUE,
+         main = "mRNA",
+         silent = TRUE)
+
+p2 <- pheatmap(mat_filt_lnc,
+         scale = "row",
+         annotation_col = annotation_col,
+         annotation_colors = ann_colors,
+         show_rownames = FALSE,
+         cluster_rows = TRUE,
+         cluster_cols = TRUE,
+         main= "lncRNA",
+         silent = TRUE)
+```
+
+Bendrai mėginiai atsiskiria pagal POS ir NEG grupes, bet is mRNR (ir šiek tiek iš lncRNA) šilumos žemėlapio matoma,
+jog yra atsiskyrimas tarp skirtingų klonų. Pastebima ir bendrame (su mRNA ir lncRNA)
+
+```{r, fig.height = 7, fig.width=18}
+rownames(annotation_col) <- sampleInfo$Barcode
+mat <- rbind(mat_filt_lnc, mat_filt_pc)
+p3 <- pheatmap(mat,
+         scale = "row",
+         annotation_col = annotation_col,
+         annotation_colors = ann_colors,
+         show_rownames = FALSE,
+         cluster_rows = TRUE,
+         cluster_cols = TRUE,
+         main= "bendras",
+         silent = TRUE)
+
+g1 <- grid.grabExpr(draw(p1))
+g2 <- grid.grabExpr(draw(p2))
+g3 <- grid.grabExpr(draw(p3))
+
+gridExtra::grid.arrange(g1, g2, g3, ncol = 3)
+```
+
+## PCA ir koreliacija pagal mėginius
 Atfiltravus pakitusios raiškos genus mėginiai atsiskiria pagal poveikio grupę.
 ```{r}
 mat <- rbind(mat_filt_lnc, mat_filt_pc)
@@ -74,13 +122,14 @@ get_pca(mat, sampleInfo) + ggtitle("Bendras")
 ```
 
 Iš visų genų raiškos (ne filtruojant) matoma, jog mėginaii atsiskiria pagal kitą grupę.
-(Masiškai skiriasi pagal POSNEG grupę)
 ```{r, fig.height= 10, fig.width = 18}
 countai <- rbind(counts_lnc, counts_pc)
 
-#a <- get_cor(counts_lnc, title = "lncRNA")
-#b <-get_cor(counts_pc, title = "mRNA")
-get_cor(countai, title = "Bendras")
+a <- get_cor(counts_lnc, title = "lncRNA")
+b <- get_cor(counts_pc, title = "mRNA")
+c <- get_cor(countai, title = "Bendras")
+
+a | b| c
 ```
 
 # Genominis kontekstas (šalia lncRNA esantys genai) {.tabset}
@@ -109,61 +158,17 @@ Kadangi pagal poveikį atsirinktas pakankmai mažas genų skaičius, didžioji d
 ```{r}
 #final_table <- get_near_table(lncGR, geneGR)
 final_table <- read.csv("~/NB_lncRNA/output/code/BioInsights/Curoxin_vs_Control/distance.csv")
-
-datatable(final_table, class = 'cell-border stripe', , rownames = FALSE)
 table(final_table$genomic_context)
-```
-
-```{r}
-ctx_df <- as.data.frame(table(final_table$genomic_context))
-colnames(ctx_df) <- c("genomic_context", "count")
-ggplot(ctx_df, aes(x = genomic_context, y = count, fill = genomic_context)) +
-  geom_col() +
-  geom_label(aes(label = count),
-             fill = "white",
-             color = "black",
-             size = 4,
-             label.size = 0.7,
-             show.legend = FALSE) +
-  coord_flip() +
-  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
-  labs(x = "Genomic context", y = "Count", title= "Genominis kontekstas DE lncRNA") +
-  theme_minimal(base_size = 14) +
-  theme(axis.text.y = element_text(size = 15),
-        axis.title = element_text(size = 15),
-        legend.position = "none",
-        plot.title = element_text(size=15))
 ```
 
 
 ## Šalia lncRRNA esantys pakitę baltymą koduojantys genai
 ```{r}
-geneGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/POS_NEG/geneGR.RDS")
+geneGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/Curoxin_vs_Control/geneGR_Cu_Co.RDS")
 final_table <- final_table[final_table$nearest_protein_coding_gene %in% geneGR$gene_name, ]
 
 datatable(final_table, class = 'cell-border stripe', , rownames = FALSE)
 table(final_table$genomic_context)
-```
-
-```{r}
-ctx_df <- as.data.frame(table(final_table$genomic_context))
-colnames(ctx_df) <- c("genomic_context", "count")
-ggplot(ctx_df, aes(x = genomic_context, y = count, fill = genomic_context)) +
-  geom_col() +
-  geom_label(aes(label = count),
-             fill = "white",
-             color = "black",
-             size = 4,
-             label.size = 0.7,
-             show.legend = FALSE) +
-  coord_flip() +
-  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
-  labs(x = "Genomic context", y = "Count", title= "Genominis kontekstas DE lncRNA") +
-  theme_minimal(base_size = 14) +
-  theme(axis.text.y = element_text(size = 15),
-        axis.title = element_text(size = 15),
-        legend.position = "none",
-        plot.title = element_text(size=15))
 ```
 
 # Koreliacija pagal raišką {.tabset}
@@ -189,6 +194,41 @@ genes <- sub("\\..*$","", genes)
 
 ego <- enrichGO(genes, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP")
 dotplot(ego, showCategory=10) + ggtitle("Koreliuojantys bendrai")
+```
+
+
+## Atskirai tarp klonų sudarius koreliacijas
+
+```{r}
+cor_df1 <- readRDS("~/NB_lncRNA/output/code/BioInsights/Curoxin_vs_Control/cor_df_7.RDS")
+cor_df2 <- readRDS("~/NB_lncRNA/output/code/BioInsights/Curoxin_vs_Control/cor_df_12.RDS")
+cor_sig1 <- subset(cor_df1, abs(value) > 0.8)
+cor_sig2 <- subset(cor_df2, abs(value) > 0.8)
+
+poros_1 <- cor_sig1[, c("lncRNA", "mRNA")]
+poros_2 <- cor_sig2[, c("lncRNA", "mRNA")]
+
+common_pairs <- inner_join(poros_1, poros_2, by = c("lncRNA", "mRNA"))
+unique_pc <- unique(common_pairs$mRNA)
+unique_pc <- sub("\\..*$", "", unique_pc)
+```
+
+
+```{r}
+entrezID <- mapIds(
+  org.Hs.eg.db,
+  keys = unique_pc,
+  column = "ENTREZID",
+  keytype = "ENSEMBL",
+  multiVals = "first")
+
+entrezID <- na.omit(entrezID)
+
+kegg <- enrichKEGG(gene         = entrezID,
+                   organism     = 'hsa',
+                   pvalueCutoff = 0.05)
+kegg_proc <- as.data.frame(kegg) %>% dplyr::select(Procesai = Description)
+kegg_proc
 ```
 
 
