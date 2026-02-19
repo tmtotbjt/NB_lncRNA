@@ -43,7 +43,7 @@ lncGR <- GRanges(
 lncGR <- lncGR[lncGR$gene_id %in% sig_lncRNAs$rn, ]
 
 ### pasikeisk pav
-saveRDS(lncGR, "~/NB_lncRNA/output/code/BioInsights/Curoxin_vs_Control/lncGR_Cu_Co.RDS")
+#saveRDS(lncGR, "~/NB_lncRNA/output/code/BioInsights/Curoxin_vs_Control/.RDS")
 ### pasikeisk pav
 
 
@@ -57,7 +57,7 @@ geneGR <- GRanges(
 geneGR <- geneGR[geneGR$gene_id %in% sig$rn, ]
 
 ### pasikeisk pav
-saveRDS(geneGR, "~/NB_lncRNA/output/code/BioInsights/geneGR.RDS")
+#saveRDS(geneGR, "~/NB_lncRNA/output/code/BioInsights/Curoxin_vs_Control/.RDS")
 ### pasikeisk pav
 ```
 
