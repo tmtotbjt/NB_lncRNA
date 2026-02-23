@@ -17,6 +17,9 @@ samples2do <- c("T1cH1", "T1cH2", "T1cN1", "T1cN2", "K7cH1", "K7cH2", "K7cN1", "
 sampleInfo <- sampleInfo[Barcode %in% samples2do, ] 
 sampleInfo$Group <- sampleInfo$Oxygen
 ```
+```{r}
+DT::datatable(sampleInfo[, .(sample, Clone,  Group)], class = 'cell-border stripe')
+```
 
 ```{r}
 list_of_4 <- tmp[[1]]
@@ -201,9 +204,7 @@ d | b
 ```
 
 # Genominis kontekstas (šalia lncRNA esantys genai) {.tabset}
-
 lncRNA lgali reguliuoti šalia esančių genų raišą. Stebima kokie yra šalia esantys pakitę baltymą koduoajntys genai.
-
 ## Šalia lncRNA esantys baltymą koduojantys genai
 ```{r}
 lncGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/Oxygen/lncGR.RDS") #padarytas su siglncRNAs
@@ -327,29 +328,6 @@ kegg_proc
 Naudojant STRING duomenų bazę sukuriamas baltymo-baltymo sąveikos tinklas 
 su pakitusiais baltymą koduojančiais genais.
 
-Vykdomas modulių anotavimas.
-```{r, fig.width=10}
-ego_list <- readRDS("~/NB_lncRNA/output/code/BioInsights/Oxygen/GO_en_mod.RDS")
-
-module_annotation <- do.call(
-  rbind,
-  lapply(names(ego_list), function(m) {
-    eg <- ego_list[[m]]
-    if (is.null(eg) || nrow(eg@result) == 0) return(NULL)
-
-  head(data.frame( Module = m, eg@result[, c("Description", "p.adjust")]), 3)}))
-
-module_labels <- aggregate(Description ~ Module, module_annotation, function(x) x[1])
-
-ggplot(module_annotation, aes(x = Module, y = Description, size = -log10(p.adjust), color = -log10(p.adjust))) +
-  geom_point() +
-  scale_color_viridis_c() +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.text.y = element_text(size= 6),
-        axis.title = element_blank()) +
-  labs(title = "GO Biological Process enrichment of PPI modules")
-```
 
 Prie susidariusių genų grupių jungiame lncRNA, kurios galėtų būti susijusios su susidariusom grupėm.
 

@@ -17,7 +17,7 @@ sampleInfo <- sampleInfo[Barcode %in% samples2do, ]
 sampleInfo$Group <- sampleInfo$Treatment
 ```
 ```{r}
-DT::datatable(sampleInfo[, .(sample, Treatment, POSNEG)], class = 'cell-border stripe')
+DT::datatable(sampleInfo[, .(sample, Clone, Treatment, POSNEG)], class = 'cell-border stripe')
 ```
 
 ```{r}
@@ -205,7 +205,6 @@ d | b
 
 # Genominis kontekstas (šalia lncRNA esantys genai) {.tabset}
 lncRNA lgali reguliuoti šalia esančių genų raišą. Stebima kokie yra šalia esantys pakitę baltymą koduoajntys genai.
-
 ## Šalia lncRNA esantys baltymą koduojantys genai
 ```{r}
 lncGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/Curoxin_vs_Control/lncGR_Cu_Co.RDS")
