@@ -8,7 +8,7 @@ pthres <- 0.1
 lfc <- log2(1.25)
 source("~/NB_lncRNA/code/BioInsights/more_code.R")
 ```
-
+Tirtas Curoxin poveikis (lyginama su kontrole). Tirta kartu su POS ir NEG mėginiais.
 ```{r}
 duomenys <-  readRDS("~/NB_lncRNA/output/code/lncRNA/DataQC/data2DEG.RDS")
 sampleInfo <- duomenys[[2]]
@@ -91,7 +91,7 @@ p2 <- pheatmap(mat_filt_lnc,
          silent = TRUE)
 ```
 
-
+Pagal raišką mėginiai labiau atisiskiria į grupes pagal poveikį lncRNA raiškoje (kuri paveikia bendrą raišką).
 ```{r, fig.height = 7, fig.width=18}
 rownames(annotation_col) <- sampleInfo$Barcode
 mat <- rbind(mat_filt_lnc, mat_filt_pc)
@@ -114,12 +114,15 @@ gridExtra::grid.arrange(g1, g2, g3, ncol = 3)
 
 ## PCA ir koreliacija pagal mėginius
 Atfiltravus pakitusios raiškos genus mėginiai atsiskiria pagal poveikio grupę.
+
+Mėginiai taip pat atsiskiria pagal POS NEG grupes.
 ```{r}
 mat <- rbind(mat_filt_lnc, mat_filt_pc)
 get_pca(mat, sampleInfo) + ggtitle("Bendras")
 ```
 
-Iš visų genų raiškos (ne filtruojant) matoma, jog mėginaii atsiskiria pagal kitą grupę.
+Iš visų genų raiškos duomenų (ne pagal labiausiai pakitusių) mėginiai atsiskiria pagal poveikį.
+Matomi ir skirtumai tarp mėginių pagal POS NEG požymį.
 ```{r, fig.height= 10, fig.width = 18}
 countai <- rbind(counts_lnc, counts_pc)
 
@@ -131,14 +134,12 @@ a | b| c
 ```
 
 # Pakitę baltymą koduojantys genai
-
 ```{r}
 sig_lnc_up <- subset(sig_lncRNAs, padj < 0.05 & log2FoldChange > 1)
 sig_lnc_down <- subset(sig_lncRNAs, padj < 0.05 & log2FoldChange < -1)
 sig_pc_up <- subset(sig, padj < 0.05 & log2FoldChange >= log2(2))
 sig_pc_down <- subset(sig, padj < 0.05 & log2FoldChange <= (-1)*log2(2))
 ```
-
 ```{r, fig.width=12}
 pc_names <- rownames(mat_pc)
 rownames(sig_pc_up) <- sub("\\..*$", "", sig_pc_up$rn)
@@ -163,8 +164,6 @@ ego <- enrichGO(gene          = rownames(sig_pc_down),
                 key           = "ENSEMBL",
                 readable      = TRUE)
 d <- dotplot(ego, showCategory=10) + ggtitle("GO sumažėjusios raiškos")
-
-c|d
 
 ensembl_ids <-  rownames(sig_pc_up)
 entrezID <- mapIds(
@@ -194,7 +193,14 @@ kegg <- enrichKEGG(gene         = entrezID,
                    pvalueCutoff = 0.05)
 b <- dotplot(kegg, showCategory=10) +ggtitle("KEGG su sumažėjusios raiškos genais")
 
-a | b
+```
+Padidėjusios raiškos genai susiję su: medžiagų, jonų transportu, medžiagų metabolizmu
+```{r}
+c | a
+```
+Sumažėjusios raiškos genai susiję su: raumenų veikla, motorika
+```{r}
+d | b
 ```
 
 
@@ -229,6 +235,9 @@ table(final_table$genomic_context)
 
 
 ## Šalia lncRRNA esantys pakitę baltymą koduojantys genai
+Atfiltravus pakitusios raiškos baltymą koduojančius genus.
+
+Liko vienas genas, su kuriuo ilgoji nekoduojančioji RNR ENSG00000302800 persidengia (galimai reguliuojamas)
 ```{r}
 geneGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/Curoxin_vs_Control/geneGR_Cu_Co.RDS")
 final_table <- final_table[final_table$nearest_protein_coding_gene %in% geneGR$gene_name, ]
@@ -238,6 +247,7 @@ table(final_table$genomic_context)
 ```
 
 ## Šalia (100kb) lncRNA esančių baltymą koduojančių GO enrichment
+Rastas geno funcijos siejamos su imunine sistema ir atsaku.
 ```{r}
 # Artimiausi genai (cis, within 100kb)
 # cituojant D Avalos (2023) — For distances between 50 kb and 1Mb between co-expressed gene pairs
@@ -253,11 +263,11 @@ go_res <- enrichGO(gene = cis_gene_names,
                    ont = "BP",
                    pvalueCutoff = 0.05)
 go_res <- as.data.frame(go_res) %>% dplyr::select(Procesai = Description)
-go_res
+datatable(go_res, class = 'cell-border stripe')
 ```
 
 # Koreliacija pagal raišką {.tabset}
-Matoma, jog yra tarpusavyje koreliuojančių lncRNA su mRNA (matomas grupių susidarymas)
+Matoma, jog yra tarpusavyje koreliuojančių lncRNA su mRNA (matomas grupių susidarymas).
 ```{r}
 cor_matrix <- cor(t(mat_filt_lnc), t(mat_filt_pc), method = "spearman")
 cor_df <- reshape2::melt(cor_matrix)
@@ -271,7 +281,8 @@ pheatmap(cor_matrix,
 
 
 ## Stipriai koreliuojančių su lncRNA mRNA funckinė anotacija
-```{r}
+Funcionalumas susijęs su: membrana (transporas, reakciją į stimulą, judėjimu).
+```{r, fig.width = 8, fig.height= 5}
 cor_df_sig <- subset(cor_df, abs(value) > 0.75)
 
 genes <- unique(as.character(cor_df_sig$mRNA))
@@ -283,7 +294,8 @@ dotplot(ego, showCategory=10) + ggtitle("Koreliuojantys bendrai")
 
 
 ## Atskirai tarp klonų sudarius koreliacijas
-
+Paėmus dviejų klonų korliacijas ir atfiltravus vienodas (taip paėmus tik genus, kurie skiriasi pagal poveikoi grupę
+atmetus skirtumą pagal POS NEG).
 ```{r}
 cor_df1 <- readRDS("~/NB_lncRNA/output/code/BioInsights/Curoxin_vs_Control/cor_df_7.RDS")
 cor_df2 <- readRDS("~/NB_lncRNA/output/code/BioInsights/Curoxin_vs_Control/cor_df_12.RDS")
@@ -296,24 +308,19 @@ poros_2 <- cor_sig2[, c("lncRNA", "mRNA")]
 common_pairs <- inner_join(poros_1, poros_2, by = c("lncRNA", "mRNA"))
 unique_pc <- unique(common_pairs$mRNA)
 unique_pc <- sub("\\..*$", "", unique_pc)
+
 ```
 
-
+Vienodai koreliuojančių genų grupės abejuose klonų tipuose neturi funkcinio aprašo.
 ```{r}
-entrezID <- mapIds(
-  org.Hs.eg.db,
-  keys = unique_pc,
-  column = "ENTREZID",
-  keytype = "ENSEMBL",
-  multiVals = "first")
+gene_df <- bitr(unique_pc,
+                fromType="ENSEMBL",
+                toType=c("SYMBOL","ENTREZID"),
+                OrgDb=org.Hs.eg.db)
 
-entrezID <- na.omit(entrezID)
+gene_df
 
-kegg <- enrichKEGG(gene         = entrezID,
-                   organism     = 'hsa',
-                   pvalueCutoff = 0.05)
-kegg_proc <- as.data.frame(kegg) %>% dplyr::select(Procesai = Description)
-kegg_proc
+AnnotationDbi::select(org.Hs.eg.db, keys = gene_df$ENTREZID, columns = c("GO","ONTOLOGY"), keytype = "ENTREZID")
 ```
 
 

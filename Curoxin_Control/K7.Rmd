@@ -84,7 +84,8 @@ pc_mat_top <- pc_mat[rownames(pc_mat) %in% rownames(pc_top), ]
 ```
 
 ## PCA
-Atsiskyrimas pagrinde dėl Curoxino poveikoi buvimo
+Skirumas mėginių pagal pakitusius. Atsiskyrimas pagrinde dėl poveikio.
+Kontroliniai mėginiai atsiskiria pagal PC1
 ```{r}
 gene_sd <- apply(logcpm, 1, sd)
 logcpm_var <- logcpm[gene_sd > 0.5, ]
@@ -92,7 +93,7 @@ get_pca(logcpm_var, sampleInfo)
 ```
 
 ## Koreliacija pagal mėginius
-Mėginiai su vienodu Curosxin poveikiu yra panašiausi
+Mėginiai ir pagal visus raiškos duomenis atsiskirai pagal poveikio grupę.
 ```{r, fig.height= 10, fig.width = 18}
 countai <- rbind(counts_lnc, counts_pc)
 
@@ -117,7 +118,7 @@ p1 <- pheatmap(logcpm[rownames(lnc_mat_top),],
          main = "lncRNA",
          silent = TRUE)
 
-p2 <- pheatmap(logcpm[rownames(pc_mat_top),],
+p2 <- pheatmap(logcpm_var[rownames(pc_mat_top),],
          scale = "row",
          annotation_col = annotation_col,
          annotation_colors = ann_colors,
@@ -128,12 +129,15 @@ p2 <- pheatmap(logcpm[rownames(pc_mat_top),],
          silent = TRUE)
 ```
 
-Visur matomas atsiskyrumas pagal grupes
-didžiąja dalimi yra padidėjusios raiškos (tiek lncRNA, tiek mRNA)
+Visur matomas atsiskyrumas pagal grupes.
+Didžiąja dalimi yra padidėjusios raiškos (tiek lncRNA, tiek mRNA).
+
+Bendroje raiškoje matoma, jog Curaxin'u veikti mėignia panašesni nei kontrolė (matoma ir PCA pagal PC1).
+
 ```{r, fig.height = 7, fig.width=18}
-mat <- logcpm[genesFC, ]
-keep <- apply(mat, 1, sd) != 0
-mat <- mat[keep, ]
+matl <- logcpm[rownames(lnc_mat_top), ]
+matp <- logcpm[rownames(pc_mat_top),]
+mat <- rbind(matl, matp)
 p3 <- pheatmap(mat,
          scale = "row",
          annotation_col = annotation_col,
@@ -168,7 +172,6 @@ pheatmap(cor_matrix,
 
 
 ## Stipriai koreliuojančių su lncRNA mRNA funckinė anotacija
-
 ```{r}
 cor_df_sig <- subset(cor_df, abs(value) > 0.7)
 
@@ -189,7 +192,7 @@ kegg <- enrichKEGG(gene         = entrezID,
                    pvalueCutoff = 0.05)
 kegg_proc <- as.data.frame(kegg) %>% dplyr::select(Procesai = Description)
 kegg_proc
-kegg_cat <- as.data.frame(kegg) %>% dplyr::select(Bendras_Procesas = category)
-kegg_cat
+#kegg_cat <- as.data.frame(kegg) %>% dplyr::select(Bendras_Procesas = category)
+#kegg_cat
 ```
 

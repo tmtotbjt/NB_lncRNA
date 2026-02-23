@@ -96,13 +96,43 @@ Mėginiai atsiskiria pagal labiausiai pakitusių genų raišką
 annotation_col <- data.frame(Group = sampleInfo$Group)
 ann_colors = list(Group = c(Hypox="#54aaaa", Normox="#e2a4ad"))
 rownames(annotation_col) <- sampleInfo$Barcode
-pheatmap(logcpm[genesFC,],
-         scale = "row", 
+p1 <- pheatmap(logcpm[rownames(lnc_mat_top),],
+         scale = "row",
          annotation_col = annotation_col,
          annotation_colors = ann_colors,
          show_rownames = FALSE,
-         cluster_rows=TRUE, 
-         cluster_cols=TRUE)
+         cluster_rows = TRUE,
+         main = "lncRNA",
+         silent = TRUE)
+
+p2 <- pheatmap(logcpm[rownames(pc_mat_top),],
+         scale = "row",
+         annotation_col = annotation_col,
+         annotation_colors = ann_colors,
+         show_rownames = FALSE,
+         cluster_rows = TRUE,
+         main= "mRNA",
+         silent = TRUE)
+```
+
+```{r, fig.height = 7, fig.width=18}
+matl <- logcpm[rownames(lnc_mat_top), ]
+matp <- logcpm[rownames(pc_mat_top),]
+mat <- rbind(matl, matp)
+p3 <- pheatmap(mat,
+         scale = "row",
+         annotation_col = annotation_col,
+         annotation_colors = ann_colors,
+         show_rownames = FALSE,
+         cluster_rows = TRUE,
+         main= "bendras",
+         silent = TRUE)
+
+g1 <- grid.grabExpr(draw(p1))
+g2 <- grid.grabExpr(draw(p2))
+g3 <- grid.grabExpr(draw(p3))
+
+gridExtra::grid.arrange(g1, g2, g3, ncol = 3)
 ```
 
 ## Koreliacija
