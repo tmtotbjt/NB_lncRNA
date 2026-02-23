@@ -84,6 +84,7 @@ pc_mat_top <- pc_mat[rownames(pc_mat) %in% rownames(pc_top), ]
 ```
 
 ## PCA
+Mėginiai atsiskiria pagal deguonies sąlygas.
 ```{r}
 gene_sd <- apply(logcpm, 1, sd)
 logcpm_var <- logcpm[gene_sd > 0.5, ]
@@ -91,7 +92,8 @@ get_pca(logcpm_var, sampleInfo)
 ```
 
 ## Heatmap
-Mėginiai atsiskiria pagal labiausiai pakitusių genų raišką
+Mėginių atsiskirimas pagal labiausiai pakitusių genų raišką.
+Mėginiai aiškia atsiskiria pagal tiriamą skirtumą.
 ```{r}
 annotation_col <- data.frame(Group = sampleInfo$Group)
 ann_colors = list(Group = c(Hypox="#54aaaa", Normox="#e2a4ad"))
@@ -114,8 +116,6 @@ p2 <- pheatmap(logcpm[rownames(pc_mat_top),],
          main= "mRNA",
          silent = TRUE)
 ```
-
-
 ```{r, fig.height = 7, fig.width=18}
 matl <- logcpm[rownames(lnc_mat_top), ]
 matp <- logcpm[rownames(pc_mat_top),]
@@ -164,6 +164,7 @@ pheatmap(cor_matrix,
 
 
 ## Stipriai koreliuojančių su lncRNA mRNA funckinė anotacija
+Koreliuojantys genai susiję su: reakcija į kintančiį deguonies kiekį, skeleto raumeninio audinio augimu, inkstais ir antinksčiais (kortikolis, vamzdelis)
 ```{r}
 cor_df_sig <- subset(cor_df, abs(value) > 0.75)
 #sudaro klasterius

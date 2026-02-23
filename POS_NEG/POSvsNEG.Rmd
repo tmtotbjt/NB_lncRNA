@@ -382,6 +382,11 @@ dotplot(ego, showCategory=10) + ggtitle("Atskirų koreliacijų GO")
 ```
 
 # Protein-protein interaction network construction, module analysis
+
+Naudojant STRING duomenų bazę sukuriamas baltymo-baltymo sąveikos tinklas 
+su pakitusiais baltymą koduojančiais genais.
+
+Vykdomas modulių anotavimas.
 ```{r, fig.width=12, fig.height=8}
 ego_list <- readRDS("~/NB_lncRNA/output/code/BioInsights/POS_NEG/GO_enrichment_all_modules.RDS")
 
@@ -403,3 +408,6 @@ ggplot(module_annotation, aes(x = Module, y = Description, size = -log10(p.adjus
         axis.title = element_blank()) +
   labs(title = "GO Biological Process enrichment of PPI modules")
 ```
+
+
+Prie susidariusių genų grupių jungiame lncRNA, kurios galėtų būti susijusios su susidariusom grupėm.

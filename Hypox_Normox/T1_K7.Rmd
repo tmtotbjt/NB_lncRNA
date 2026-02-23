@@ -1,3 +1,4 @@
+Deguonies sąlygos (hypox- mažai deguonies, normox- normalus deguonies kiekis)
 ```{r}
 library(pacman)
 p_load(rtracklayer, GenomicRanges, dplyr, data.table, dplyr, DESeq2, ggplot2, ggrepel, tidyr, 
@@ -63,6 +64,9 @@ rownames(mat_filt_pc) <- sub("\\..*$", "", rownames(mat_filt_pc))
 # Bendras mėginių pasižiūrėjimas {.tabset}
 
 ## Heatmap
+Pagrinde matomas atsiskyrimas pagal tiriamą poveikį.
+
+Matomas atsiskyrimas klonų viduje (nedidelis).
 ```{r}
 annotation_col <- data.frame(Group = sampleInfo$Group)
 ann_colors = list(Group = c(Hypox="cyan", Normox="lightpink"))
@@ -108,7 +112,7 @@ gridExtra::grid.arrange(g1, g2, g3, ncol = 3)
 ```
 
 ## Koreliacija pagal mėginius
-
+Pagal visų geų raišką mėginiai atsiskiria pagal klonus.
 ```{r, fig.height= 10, fig.width = 18}
 countai <- rbind(counts_lnc, counts_pc)
 
@@ -120,16 +124,12 @@ a | b| c
 ```
 
 ## PCA
-
+Matomas aiškus atsiskyrimas pagal tiriamas sąlygas.
 ```{r}
-#get_pca(mat_filt_lnc, sampleInfo) + ggtitle("tik lncRNA")
-#get_pca(mat_filt_pc, sampleInfo)+ ggtitle("tik mRNA")
 get_pca(mat, sampleInfo) + ggtitle("Bendras")
-
 ```
 
 # Pakitę baltymą koduojantys genai
-
 ```{r}
 sig_lnc_up <- subset(sig_lncRNAs, padj < 0.05 & log2FoldChange > 1)
 sig_lnc_down <- subset(sig_lncRNAs, padj < 0.05 & log2FoldChange < -1)
@@ -137,7 +137,7 @@ sig_pc_up <- subset(sig, padj < 0.05 & log2FoldChange >= log2(2))
 sig_pc_down <- subset(sig, padj < 0.05 & log2FoldChange <= (-1)*log2(2))
 ```
 
-```{r, fig.width=12}
+```{r}
 pc_names <- rownames(mat_pc)
 rownames(sig_pc_up) <- sub("\\..*$", "", sig_pc_up$rn)
 pc_names <- sub("\\..*$", "", pc_names)
@@ -161,9 +161,8 @@ ego <- enrichGO(gene          = rownames(sig_pc_down),
                 key           = "ENSEMBL",
                 readable      = TRUE)
 d <- dotplot(ego, showCategory=10) + ggtitle("GO sumažėjusios raiškos")
-
-c|d
-
+```
+```{r}
 ensembl_ids <-  rownames(sig_pc_up)
 entrezID <- mapIds(
   org.Hs.eg.db,
@@ -191,8 +190,14 @@ kegg <- enrichKEGG(gene         = entrezID,
                    organism     = 'hsa',
                    pvalueCutoff = 0.05)
 b <- dotplot(kegg, showCategory=10) +ggtitle("KEGG su sumažėjusios raiškos genais")
-
-a | b
+```
+Padidėjusios raiškos genai susiję su: kaulų formavimasis, ląstelės judėjimu, adhezija, ląsteliu ciklu.
+```{r, fig.width=12}
+c | a
+```
+Sumažėjusios raiškos genai susiję su: oksidacinės aplinkos pokyčiais (reakcija), raumenimis, anglies dioksidu.
+```{r, fig.width=12}
+d | b
 ```
 
 # Genominis kontekstas (šalia lncRNA esantys genai) {.tabset}
@@ -221,14 +226,14 @@ table(final_table$genomic_context)
 ```
 
 ## Šalia lncRRNA esantys pakitę baltymą koduojantys genai
+Atfiltravus pakitusios raiškos baltymą koduojančius genus.
+Visi yra intergeniniai.
 ```{r}
 geneGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/Oxygen/geneGR.RDS")
 final_table <- final_table[final_table$nearest_protein_coding_gene %in% geneGR$gene_name, ]
 
 datatable(final_table, class = 'cell-border stripe', , rownames = FALSE)
-table(final_table$genomic_context)
 ```
-
 
 ## Šalia (100kb) lncRNA esančių baltymą koduojančių GO enrichment
 ```{r}
@@ -252,7 +257,7 @@ go_res
 
 # Koreliacija {.tabset}
 ## Pagal raišką
-
+Matoma, jog yra tarpusavyje koreliuojančių lncRNA su mRNA (matomas grupių susidarymas).
 ```{r}
 cor_matrix <- cor(t(mat_filt_lnc), t(mat_filt_pc), method = "spearman")
 cor_df <- reshape2::melt(cor_matrix)
@@ -267,6 +272,7 @@ pheatmap(cor_matrix,
 
 ## Stipriai koreliuojančių su lncRNA mRNA funckinė anotacija {.tabset}
 ### Lyginant abu ląstelių klonus kartu
+Funkcijos susijusios su reakcija į deguonies pokyčius, raumenimis.
 ```{r}
 # Pasidaryti atskirus tegiamai ir neigiamai koreliuojantiems (?)
 cor_df_sig <- subset(cor_df, abs(value) > 0.85)
@@ -318,9 +324,11 @@ kegg_proc
 ```
 
 # Protein-protein interaction network construction, module analysis
-Sąveikaujančių baltymų grupių anotacijos.
+Naudojant STRING duomenų bazę sukuriamas baltymo-baltymo sąveikos tinklas 
+su pakitusiais baltymą koduojančiais genais.
 
-```{r, fig.width=12}
+Vykdomas modulių anotavimas.
+```{r, fig.width=10}
 ego_list <- readRDS("~/NB_lncRNA/output/code/BioInsights/Oxygen/GO_en_mod.RDS")
 
 module_annotation <- do.call(
@@ -338,6 +346,10 @@ ggplot(module_annotation, aes(x = Module, y = Description, size = -log10(p.adjus
   scale_color_viridis_c() +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.text.y = element_text(size= 6),
         axis.title = element_blank()) +
   labs(title = "GO Biological Process enrichment of PPI modules")
 ```
+
+Prie susidariusių genų grupių jungiame lncRNA, kurios galėtų būti susijusios su susidariusom grupėm.
+

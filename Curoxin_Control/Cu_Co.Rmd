@@ -121,8 +121,7 @@ mat <- rbind(mat_filt_lnc, mat_filt_pc)
 get_pca(mat, sampleInfo) + ggtitle("Bendras")
 ```
 
-Iš visų genų raiškos duomenų (ne pagal labiausiai pakitusių) mėginiai atsiskiria pagal poveikį.
-Matomi ir skirtumai tarp mėginių pagal POS NEG požymį.
+Iš visų genų raiškos duomenų (ne pagal labiausiai pakitusių) mėginiai atsiskiria pagal klonus.
 ```{r, fig.height= 10, fig.width = 18}
 countai <- rbind(counts_lnc, counts_pc)
 
@@ -140,7 +139,7 @@ sig_lnc_down <- subset(sig_lncRNAs, padj < 0.05 & log2FoldChange < -1)
 sig_pc_up <- subset(sig, padj < 0.05 & log2FoldChange >= log2(2))
 sig_pc_down <- subset(sig, padj < 0.05 & log2FoldChange <= (-1)*log2(2))
 ```
-```{r, fig.width=12}
+```{r}
 pc_names <- rownames(mat_pc)
 rownames(sig_pc_up) <- sub("\\..*$", "", sig_pc_up$rn)
 pc_names <- sub("\\..*$", "", pc_names)
@@ -195,11 +194,11 @@ b <- dotplot(kegg, showCategory=10) +ggtitle("KEGG su sumažėjusios raiškos ge
 
 ```
 Padidėjusios raiškos genai susiję su: medžiagų, jonų transportu, medžiagų metabolizmu
-```{r}
+```{r, fig.width=12}
 c | a
 ```
 Sumažėjusios raiškos genai susiję su: raumenų veikla, motorika
-```{r}
+```{r, fig.width=12}
 d | b
 ```
 
