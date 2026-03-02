@@ -133,6 +133,13 @@ pheatmap(cor_matrix,
 
 
 ## Stipriai koreliuojančių su lncRNA mRNA funckinė anotacija
+Stipriai koreliuojančių su lncRNA mRNA funcionalumas:
+
+- Ląstelės-ląstelės jungtiimis
+
+- Transportu ląstelės memebrana
+
+- Sinapsių veikla, mokymusi
 ```{r}
 cor_df_sig <- subset(cor_df, abs(value) > 0.75)
 #sudaro klasterius

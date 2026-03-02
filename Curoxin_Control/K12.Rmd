@@ -150,6 +150,9 @@ gridExtra::grid.arrange(g1, g2, g3, ncol = 3)
 
 
 ## Pagal raišką
+Matoma, jog tam tikros mRNA koreliuoja su lncRNA.
+
+Matomas ir atskiras klasteris, kuris gali aiškinti K12Cu2 atsiskyrimą nuo kitų mėginių.
 ```{r}
 # pearson sutinkama straipsniuose, bet yra kad siūlo spearman
 cor_matrix <- cor(t(lnc_mat_top), t(pc_mat_top), method = "spearman")

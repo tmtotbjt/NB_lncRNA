@@ -35,7 +35,7 @@ rownames(mat) <- vsd$rn
 
 res <- results(dds) %>% as.data.table(., keep.rownames=TRUE) 
 
-sig_lncRNAs <- subset(res, pvalue < 0.01 & abs(log2FoldChange) > 1.25)
+sig_lncRNAs <- subset(res, padj < 0.05 & abs(log2FoldChange) > 1.25)
 sig_lncRNAs <- sig_lncRNAs[order(sig_lncRNAs$padj), ]
 sig_lncRNAs$gene_id <- rownames(sig_lncRNAs)
 sig_lncRNAs <- as.data.frame(sig_lncRNAs)
@@ -57,7 +57,7 @@ vsd_pc <- vst(dds)
 mat_pc <- assay(vsd_pc)
 res_pc <- results(dds) %>% as.data.table(., keep.rownames=TRUE)
 
-sig <- subset(res_pc, pvalue < 0.05 & abs(log2FoldChange) >= 2)
+sig <- subset(res_pc, padj < 0.05 & abs(log2FoldChange) >= 2)
 sig <- sig[order(sig$padj), ]
 sig <- as.data.frame(sig)
 mat_filt_pc <- mat_pc[rownames(mat_pc) %in% sig$rn, ]
@@ -127,7 +127,7 @@ a | b| c
 ```
 
 ## PCA
-Matomas aiškus atsiskyrimas pagal tiriamas sąlygas.
+Pagal pakitusios raiškos genus matomas aiškus atsiskyrimas pagal tiriamas sąlygas.
 ```{r}
 get_pca(mat, sampleInfo) + ggtitle("Bendras")
 ```
@@ -221,7 +221,7 @@ Genominė padėtis:
 
 - Intergenic - lncRNA tarp baltymą koduojančių genų.
 ```{r}
-#final_table <- get_near_table(lncGR, geneGR)
+#final_table <- get_near_table(lncGR, geneGR) 
 final_table <- read.csv("~/NB_lncRNA/output/code/BioInsights/Oxygen/distance.csv")
 table(final_table$genomic_context)
 ```
@@ -292,7 +292,6 @@ dotplot(ego, showCategory=10) + ggtitle("Koreliuojantys bendrai")
 
 
 ### Atskirai tarp klonų sudarius koreliacijas
-
 ```{r}
 cor_df_T1 <- readRDS("~/NB_lncRNA/output/code/BioInsights/Oxygen/cor_T.RDS")
 cor_df_K7 <- readRDS("~/NB_lncRNA/output/code/BioInsights/Oxygen/cor_K.RDS")
@@ -324,10 +323,145 @@ kegg_proc <- as.data.frame(kegg) %>% dplyr::select(Procesai = Description)
 kegg_proc
 ```
 
-# Protein-protein interaction network construction, module analysis
+# Protein-protein interaction network construction, module analysis {.tabset}
 Naudojant STRING duomenų bazę sukuriamas baltymo-baltymo sąveikos tinklas 
 su pakitusiais baltymą koduojančiais genais.
 
-
 Prie susidariusių genų grupių jungiame lncRNA, kurios galėtų būti susijusios su susidariusom grupėm.
+```{r}
+g <- readRDS( "~/NB_lncRNA/output/code/BioInsights/graph/network_graph_TK.RDS")
+V(g)$name <- V(g)$symbol
+tg <- readRDS("~/NB_lncRNA/output/code/BioInsights/graph/tbl_TK.rds")
+```
+## lncRNA ir mRNA tinklo analizė {.tabset}
+### Tinklas
+Turima 169 mazgus ir 213 ryšius tarp ilgųjų nekoduojančių RNR ir baltymų arba baltymo-baltymo
 
+Mazgai panašaus, nedidelio dydžio.
+```{r}
+table(V(g)$type)
+table(E(g)$edge_type)
+
+vcount(g)
+ecount(g)
+```
+```{r, fig.height=10, fig.width=10}
+ggraph(tg, layout = "fr") +
+  geom_edge_link(aes(color = edge_type), alpha = 0.3) +
+  geom_node_point(aes(color = type, size = degree, shape = type)) +
+  geom_node_text(aes(label = symbol), repel = TRUE, size = 3) +
+  scale_color_manual(values = c("lncRNA" = "orange", "protein" = "skyblue")) +
+  scale_edge_color_manual(values = c("lncRNA_corr" = "red", "PPI" = "#261ace")) +
+  scale_shape_manual(values = c("lncRNA" = 17, "protein" = 16)) +
+  theme_void() +
+  ggtitle("lncRNA-PPI Network with Modules and Hubs")
+```
+- Degree -> skaičius ryšių vienai lncRNA (top 10 su didžiausių skaičumi ryšių)
+
+- Betweenness -> trumpiausias atstumas tinkle (tiltas kitų elementų sujungimui tinkle)
+
+- Eigenvector- lncRNA kurių jungtis prie mRNR yra stipriausia (jungiasi su mRNA)
+
+- Module- kuriai grupei priklauso (kurioje genų grupėje veikia)
+
+Atrenkamos lncRNA, kurios gali būti reguliatoriais
+```{r}
+library(tidygraph)
+library(dplyr)
+tg <- tg %>%
+  activate(nodes) %>%
+  mutate(degree = centrality_degree(),
+         betweenness = centrality_betweenness(),
+         eigenvector = centrality_eigen() )
+node_stats <- tg %>%
+  activate(nodes) %>%
+  as_tibble()
+
+lnc_stats <- node_stats %>%
+  filter(type == "lncRNA") %>%
+  mutate(
+    deg_rank = percent_rank(degree),
+    bet_rank = percent_rank(betweenness),
+    eig_rank = percent_rank(eigenvector) ) %>%
+  mutate(regulatory_score = deg_rank + bet_rank + eig_rank) %>%
+  arrange(desc(regulatory_score))
+
+lnc_stats_clean <- lnc_stats[,c(3:11)]
+datatable(lnc_stats_clean, options = list(pageLength = 10, scrollX = TRUE))
+```
+
+```{r}
+threshold <- quantile(lnc_stats$regulatory_score, 0.75)
+
+top_lnc <- lnc_stats %>%
+  filter(regulatory_score >= threshold)
+
+top_lnc$name
+```
+### lncRNA funkcijos priskyrimas pagal tinklą
+```{r}
+lnc_enrichment_results <- readRDS("~/NB_lncRNA/output/code/BioInsights/graph/lncEn_TK.RDS")
+```
+```{r, fig.height= 8, fig.width=10}
+top5_lnc <- top_lnc$symbol[1:5]
+
+library(cowplot)
+plots <- lapply(top5_lnc, function(lnc){
+  ego <- lnc_enrichment_results[[lnc]]
+  if(is.null(ego) || nrow(as.data.frame(ego)) == 0) return(NULL)
+  dotplot(ego, showCategory = 10, title = lnc) })
+
+plots <- plots[!sapply(plots, is.null)]
+plot_grid(plotlist = plots, ncol = 2) 
+```
+
+### Lentelė su top lncRNA ir jų mRNA reguliacija
+```{r}
+geneGR_df <- as.data.frame(geneGR)
+res_pc <- sig %>%
+  mutate(symbol = geneGR_df$gene_name[match(rn, geneGR_df$gene_id)]) %>%
+  mutate(mRNA_regulation = case_when(
+    log2FoldChange > 0 ~ "up",
+    log2FoldChange < 0 ~ "down",
+    TRUE ~ "no_change")) %>%
+  select(rn, symbol, log2FoldChange, mRNA_regulation)
+
+lncGR_df <- as.data.frame(lncGR)
+res_lnc <- sig_lncRNAs %>%
+  mutate(symbol = lncGR_df$gene_name[match(rn, lncGR_df$gene_id)]) %>%
+  mutate(lncRNA_regulation = case_when(
+    log2FoldChange > 0 ~ "up",
+    log2FoldChange < 0 ~ "down",
+    TRUE ~ "no_change")) %>%
+  select(rn, symbol, log2FoldChange, lncRNA_regulation)
+
+lnc_reg <- res_lnc %>%
+  select(symbol, log2FoldChange) %>%
+  mutate(lnc_direction = ifelse(log2FoldChange > 0, "up", "down"))
+
+lnc_nodes <- V(g)[type == "lncRNA"]
+lnc_mrna_table <- do.call(rbind, lapply(lnc_nodes$symbol, function(lnc) {
+  
+  neigh <- neighbors(g, lnc)
+  target_mrna <- V(g)$symbol[neigh][V(g)$type[neigh] == "protein"]
+  
+  if(length(target_mrna) == 0) return(NULL)
+  
+  data.frame(
+    lncRNA = lnc,
+    target_mRNA = target_mrna,
+    stringsAsFactors = FALSE ) }))
+
+mRNA_reg <- res_pc %>%
+  select(symbol, log2FoldChange) %>%
+  mutate(mRNA_direction = ifelse(log2FoldChange > 0, "up", "down"))
+
+lnc_mrna_table <- lnc_mrna_table %>%
+  left_join(lnc_reg %>% select(symbol, lnc_direction), by = c("lncRNA" = "symbol")) %>%
+  left_join(mRNA_reg %>% select(symbol, mRNA_direction), by = c("target_mRNA" = "symbol"))
+
+lnc_mrna <- lnc_mrna_table %>%
+  filter(lncRNA %in% top5_lnc)
+
+datatable(lnc_mrna, options = list(pageLength = 10, scrollX = TRUE))
+```

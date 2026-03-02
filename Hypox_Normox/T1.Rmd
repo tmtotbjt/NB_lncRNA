@@ -165,7 +165,8 @@ pheatmap(cor_matrix,
 
 
 ## Stipriai koreliuojančių su lncRNA mRNA funckinė anotacija
-Koreliuojantys genai susiję su: reakcija į kintančiį deguonies kiekį, raumenimis (veikla, vystymasis), erakcija į aplinką
+Koreliuojantys genai susiję su: reakcija į kintančiį deguonies kiekį, 
+raumenimis (veikla, vystymasis), reakcija į aplinką
 ```{r}
 cor_df_sig <- subset(cor_df, abs(value) > 0.75)
 #sudaro klasterius

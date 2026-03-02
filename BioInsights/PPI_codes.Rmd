@@ -11,7 +11,7 @@
 # GRanges
 ```{r}
 # Jeigu reiktų keisti (mažinti)
-sig_lncRNAs <- subset(res, padj < 0.05 & abs(log2FoldChange) > 2)
+sig_lncRNAs <- subset(res, padj < 0.01 & abs(log2FoldChange) > 2.5)
 sig_lncRNAs <- sig_lncRNAs[order(sig_lncRNAs$padj), ]
 sig_lncRNAs$gene_id <- rownames(sig_lncRNAs)
 sig_lncRNAs <- as.data.frame(sig_lncRNAs)
@@ -20,7 +20,7 @@ mat_filt_lnc <- mat[rownames(mat) %in% rownames(sig_lncRNAs), ]
 rownames(mat_filt_lnc) <- sub("\\..*$", "", rownames(mat_filt_lnc))
 
 
-sig <- subset(res_pc, padj < 0.05 & abs(log2FoldChange) >= 4)
+sig <- subset(res_pc, padj < 0.01 & abs(log2FoldChange) >= 5)
 sig <- sig[order(sig$padj), ]
 sig <- as.data.frame(sig)
 mat_filt_pc <- mat_pc[rownames(mat_pc) %in% sig$rn, ]
@@ -41,7 +41,7 @@ lncGR <- GRanges(
     strand   = strand(gtf_lnc),
     gene_name = mcols(gtf_lnc)$gene_name,
     gene_id   = mcols(gtf_lnc)$gene_id)
-lncGR <- lncGR[lncGR$gene_id %in% sig_lncRNAs$rn, ]
+lncGR <- lncGR[lncGR$gene_id %in% rownames(sig_lncRNAs), ] #keiciam rn i rownames ir atv
 
 ### pasikeisk pav
 #saveRDS(lncGR, "~/NB_lncRNA/output/code/BioInsights//lncGR.RDS")
