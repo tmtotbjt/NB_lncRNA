@@ -4,7 +4,7 @@ Teigiami klonai (POS)
 library(pacman)
 p_load(rtracklayer, GenomicRanges, dplyr, data.table, dplyr, DESeq2, ggplot2, ggrepel, tidyr, 
       readxl, biomaRt, clusterProfiler, org.Hs.eg.db, DT, ChIPseeker, TxDb.Hsapiens.UCSC.hg38.knownGene, 
-      pheatmap, flashClust, ggraph, ComplexHeatmap, gridExtra, grid)
+      pheatmap, flashClust, ggraph, ComplexHeatmap, gridExtra, grid, edgeR)
 knitr::opts_chunk$set(fig.width=6, fig.height=6, echo = T)
 pthres <- 0.1
 lfc <- log2(1.25)
@@ -37,7 +37,6 @@ counts_pc <- counts_pc[, samples2do]
 ```
 
 ```{r}
-library(edgeR)
 countai <- rbind(counts_lnc, counts_pc)
 
 Status <- factor(sampleInfo$Group, levels = c("Curaxin", "control"))

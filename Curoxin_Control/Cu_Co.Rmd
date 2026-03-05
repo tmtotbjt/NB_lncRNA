@@ -2,7 +2,7 @@
 library(pacman)
 p_load(rtracklayer, GenomicRanges, dplyr, data.table, dplyr, DESeq2, ggplot2, ggrepel, tidyr, 
       readxl, biomaRt, clusterProfiler, org.Hs.eg.db, DT, ChIPseeker, TxDb.Hsapiens.UCSC.hg38.knownGene, 
-      pheatmap, flashClust, ggraph, ComplexHeatmap, gridExtra, grid, tidygraph)
+      pheatmap, flashClust, ggraph, ComplexHeatmap, gridExtra, grid, tidygraph, edgeR)
 knitr::opts_chunk$set(fig.width=6, fig.height=6, echo = T)
 pthres <- 0.1
 lfc <- log2(1.25)
@@ -43,7 +43,6 @@ sig_lncRNAs <- as.data.frame(sig_lncRNAs)
 mat_filt_lnc <- mat[rownames(mat) %in% sig_lncRNAs$rn, ]
 rownames(mat_filt_lnc) <- sub("\\..*$", "", rownames(mat_filt_lnc))
 ```
-
 ```{r}
 #Protein coding
 duomenys <- readRDS("~/NB_lncRNA/input/data2DEG_protein.RDS")
@@ -65,7 +64,6 @@ rownames(mat_filt_pc) <- sub("\\..*$", "", rownames(mat_filt_pc))
 
 resultsNames(dds)
 ```
-
 
 # Bendras mėginių pasižiūrėjimas {.tabset}
 ## Heatmap
@@ -279,6 +277,26 @@ pheatmap(cor_matrix,
          show_colnames = FALSE)
 ```
 
+Atmetus poveikio grupę, matomi klasteriai, kurie gali kinta kartu.
+```{r}
+Status <- factor(sampleInfo$Group, levels = c("Curaxin", "control"))
+design <- model.matrix(~Status)
+fit <- lmFit(mat_filt_lnc, design)
+mat_lnc <- residuals.MArrayLM(fit, mat_filt_lnc)
+
+fit <- lmFit(mat_filt_pc, design)
+mat_pc <- residuals.MArrayLM(fit, mat_filt_pc)
+
+cor_matrix <- cor(t(mat_lnc), t(mat_pc), method = "spearman")
+cor_df <- reshape2::melt(cor_matrix)
+colnames(cor_df) <- c("lncRNA", "mRNA", "value")
+pheatmap(cor_matrix,
+         clustering_distance_rows = "euclidean",
+         clustering_distance_cols = "euclidean",
+         show_rownames = FALSE,
+         show_colnames = FALSE)
+```
+
 
 ## Stipriai koreliuojančių su lncRNA mRNA funckinė anotacija
 Funcionalumas susijęs su: membrana (transporas, reakciją į stimulą, judėjimu).
@@ -328,7 +346,6 @@ Naudojant STRING duomenų bazę sukuriamas baltymo-baltymo sąveikos tinklas
 su pakitusiais baltymą koduojančiais genais.
 
 Prie susidariusių genų grupių jungiame lncRNA, kurios galėtų būti susijusios su susidariusom grupėm.
-
 ```{r}
 g <- readRDS( "~/NB_lncRNA/output/code/BioInsights/graph/network_graph_CC.RDS")
 V(g)$name <- V(g)$symbol
@@ -345,6 +362,7 @@ table(E(g)$edge_type)
 
 vcount(g)
 ecount(g)
+components(g)$csize
 ```
 ```{r, fig.height=10, fig.width=10}
 ggraph(tg, layout = "fr") +
@@ -403,7 +421,7 @@ top_lnc$name
 ```{r}
 lnc_enrichment_results <- readRDS("~/NB_lncRNA/output/code/BioInsights/graph/lncEn_CC.RDS")
 ```
-```{r, fig.height= 8}
+```{r, fig.height=12, fig.width= 12}
 top5_lnc <- top_lnc$symbol[1:5]
 
 library(cowplot)

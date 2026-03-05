@@ -1,38 +1,36 @@
+Protein-Protein Interaction (Baltymo-Baltymo sąveikas) nagrinėti + per koreliacijas prie susidariųsių genų grupių pridėti lncRNA
+
+Kodas didesniems setams (bent 8 mėginiai)
+
+Pakaita populiariam WGCNA (jam reikia bent 15 mėginių)
+
 ```{r}
-library(dplyr)
-library(igraph)
-library(ggraph)
-library(tidygraph)
-library(STRINGdb)
-
-# Jeigu reiktų keisti pagal ką reikšminga
-sig_lncRNAs <- subset(res, padj < 0.05 & abs(log2FoldChange) > 1)
-sig_lncRNAs <- sig_lncRNAs[order(sig_lncRNAs$padj), ]
-sig_lncRNAs$gene_id <- rownames(sig_lncRNAs)
-sig_lncRNAs <- as.data.frame(sig_lncRNAs)
-rownames(sig_lncRNAs) <- sub("\\..*$", "",sig_lncRNAs$rn)
-
-mat_filt_lnc <- mat[rownames(mat) %in% sig_lncRNAs$rn, ]
-rownames(mat_filt_lnc) <- sub("\\..*$", "", rownames(mat_filt_lnc))
-
-sig <- subset(res_pc, padj < 0.05 & abs(log2FoldChange) >= 1)
-sig <- sig[order(sig$padj), ]
-sig <- as.data.frame(sig)
-rownames(sig) <- sub("\\..*$", "",sig$rn)
-
-mat_filt_pc <- mat_pc[rownames(mat_pc) %in% sig$rn, ]
-rownames(mat_filt_pc) <- sub("\\..*$", "", rownames(mat_filt_pc))
+library(pacman)
+p_load(dplyr, igraph, ggraph, tidygraph, STRINGdb, clusterProfiler, org.Hs.eg.db)
 ```
 
+Pašalinimas treatment effect sužinoti galimas reguliacijas apkitusių genų per koreliacijas
 ```{r}
-cor_mat <- cor(t(mat_filt_lnc), t(mat_filt_pc), method="pearson")
+mat <- rbind(mat_filt_lnc, mat_filt_pc)
+Status <- factor(sampleInfo$Group, levels = c("Batimastat", "control"))
+design <- model.matrix(~Status)
+fit <- lmFit(mat_filt_lnc, design)
+mat_lnc <- residuals.MArrayLM(fit, mat_filt_lnc)
+
+fit <- lmFit(mat_filt_pc, design)
+mat_pc <- residuals.MArrayLM(fit, mat_filt_pc)
+```
+
+Ištraukiamos reikšmingos koreliacijos
+```{r}
+cor_mat <- cor(t(mat_lnc), t(mat_pc), method="pearson")
 n_top <- ceiling(length(cor_mat) * 0.01)
 cor_vals <- as.vector(cor_mat)
 top_thr <- sort(abs(cor_vals), decreasing = TRUE)[n_top]
 sig_linked <- which(abs(cor_mat) >= top_thr, arr.ind = TRUE)
 
-lnc_ids <- rownames(mat_filt_lnc)
-pc_ids  <- rownames(mat_filt_pc)
+lnc_ids <- rownames(mat_lnc)
+pc_ids  <- rownames(mat_pc)
 
 sig_links <- data.frame(
   lncRNA_id = lnc_ids[sig_linked[, "row"]],
@@ -110,10 +108,9 @@ colnames(sig_links)[colnames(sig_links) == "gene_name"] <- "lncRNA"
 sig_links <- sig_links[,c(5, 4, 3)]
 ```
 
-Supaminimas baltymą koduojančių genų pagal duomenų bazę, kuri pasako, kas tarpusavyje sąveikauja (pagal eksperimentinius duomenis)
+Sumapinimas baltymą koduojančių genų pagal duomenų bazę, kuri pasako, kas tarpusavyje (baltymai) sąveikauja (pagal eksperimentinius duomenis)
 ```{r}
 # Duomenų bazės įkėlimas
-library(STRINGdb)
 string_db <- STRINGdb$new(version="12.0", 
                           species=9606,
                           score_threshold=400,
@@ -133,7 +130,7 @@ ppi_edges <- ppi %>% transmute(
 )
 ```
 
-Darymas lncRNA ir mRNA tinklo
+Jungiamos koreliacijos lncRNA su StringDb informacija.
 ```{r}
 reg_edges <- sig_links %>% transmute(
   from   = lncRNA,
@@ -159,7 +156,7 @@ prot_map <- string_db$get_proteins()[, c("protein_external_id", "preferred_name"
 nodes <- merge(nodes, prot_map, by.x = "id", by.y = "protein_external_id", all.x = TRUE)
 nodes$symbol <- ifelse(
   nodes$type == "lncRNA",
-  nodes$id,  # lncRNA ID or name
+  nodes$id,  # lncRNA ID
   ifelse(!is.na(nodes$preferred_name), nodes$preferred_name, nodes$id))
 
 nodes <- nodes[,c(1, 2, 4)]
@@ -245,8 +242,8 @@ ggraph(tg, layout = "fr") +
   scale_shape_manual(values = c("lncRNA" = 17, "protein" = 16)) +
   theme_void() +
   ggtitle("Clean LncRNA-PPI Network with Modules and Hubs")
-#saveRDS(g, file = "~/NB_lncRNA/output/code/BioInsights/graph/network_graph_NBC.RDS")
-#saveRDS(tg, file = "~/NB_lncRNA/output/code/BioInsights/graph/tbl_NBC.rds")
+#saveRDS(g, file = "~/NB_lncRNA/output/code/BioInsights/graph/network_graph_HBC.RDS")
+#saveRDS(tg, file = "~/NB_lncRNA/output/code/BioInsights/graph/tbl_HBC.rds")
 ```
 
 
@@ -263,13 +260,43 @@ ggraph(tg, layout = "fr") +
   scale_edge_color_manual(values = c("lncRNA_corr" = "red", "PPI" = "#261ace")) +
   scale_shape_manual(values = c("lncRNA" = 17, "protein" = 16)) +
   theme_void() +
-  ggtitle("Clean LncRNA-PPI Network with Modules and Hubs")
+  ggtitle("LncRNA-PPI Network with Modules and Hubs")
 ```
 
 ```{r}
-library(clusterProfiler)
-library(org.Hs.eg.db)
+library(tidygraph)
+library(dplyr)
+tg <- tg %>%
+  activate(nodes) %>%
+  mutate(degree = centrality_degree(),
+         betweenness = centrality_betweenness(),
+         eigenvector = centrality_eigen() )
+node_stats <- tg %>%
+  activate(nodes) %>%
+  as_tibble()
+  
+lnc_stats <- node_stats %>%
+  filter(type == "lncRNA") %>%
+  mutate(
+    deg_rank = percent_rank(degree),
+    bet_rank = percent_rank(betweenness),
+    eig_rank = percent_rank(eigenvector) ) %>%
+  mutate(regulatory_score = deg_rank + bet_rank + eig_rank) %>%
+  arrange(desc(regulatory_score))
 
+lnc_stats_clean <- lnc_stats[,c(3:11)]
+datatable(lnc_stats_clean, options = list(pageLength = 10, scrollX = TRUE))
+```
+```{r}
+threshold <- quantile(lnc_stats$regulatory_score, 0.75)
+
+top_lnc <- lnc_stats %>%
+  filter(regulatory_score >= threshold)
+
+top_lnc$name
+```
+
+```{r}
 lnc_enrichment_results <- list()
 
 for (lnc in top_lnc$symbol) {
@@ -294,5 +321,5 @@ for (lnc in top_lnc$symbol) {
 }
 
 lnc_enrichment_results
-saveRDS(lnc_enrichment_results, "~/NB_lncRNA/output/code/BioInsights/graph/lncEn_HN.RDS")
+saveRDS(lnc_enrichment_results, "~/NB_lncRNA/output/code/BioInsights/graph/lncEn_HBC.RDS")
 ```

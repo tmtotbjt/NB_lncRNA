@@ -2,69 +2,9 @@ library(ggthemes, viridis)
 library(igraph)
 
 
-get_long <- function(z, x) {z %>%
-  filter(!is.na(.data[[x]])) %>%
-  separate_rows(.data[[x]], sep = ",") %>%
-  mutate(across(all_of(x), trimws))
-}
-
-get_fc <- function(a, b) {
-  a %>%
-  mutate(direction = case_when(
-    log2FoldChange > 1  ~ "up",
-    log2FoldChange < -1 ~ "down",
-    TRUE ~ "ns")) %>%
-  filter(direction != "ns") %>%
-  group_by(.data[[b]]) %>%
-  summarise(n = n_distinct(gene_id), 
-            up = n_distinct(gene_id[direction == "up"]),
-            down = n_distinct(gene_id[direction == "down"]),
-            mean_log2FC = mean(log2FoldChange, na.rm = TRUE),
-            .groups = "drop") %>%
-  arrange(desc(n))
-}
-get_dir <- function(a, b) {
-  get_fc(a, b) %>%
-    dplyr::select(.data[[b]], up, down) %>%
-    pivot_longer(
-      cols = c(up, down),
-      names_to = "direction",
-      values_to = "count"
-    )
-}
-
-get_plot <- function(z, x) {ggplot(z,
-       aes(x = reorder(.data[[x]], count), y = count, fill = direction)) +
-  geom_col() +
-  coord_flip() +
-  theme(axis.text.x = element_text(size = 8),
-        axis.text.y = element_text(size = 10),
-        axis.title = element_text(size = 10),
-        plot.title = element_text(size=15, hjust = 0))
-}
-
-
-get_prop <- function(sig, all, col){
-    sig_prop <- table(sig[[col]]) / nrow(sig)
-    bg_prop  <- table(all[[col]]) / nrow(all)
-
-    prop_df <- merge(
-    data.frame(temp = names(sig_prop), Sig = as.numeric(sig_prop)),
-    data.frame(temp = names(bg_prop),  Bg  = as.numeric(bg_prop)),
-    by = "temp",
-    all = TRUE)
-
-  names(prop_df)[names(prop_df) == "temp"] <- col
-
-    prop_df$ratio <- prop_df$Sig / prop_df$Bg
-
-  prop_df %>%
-    filter(!is.na(Sig), Sig > 0) %>%
-    arrange(desc(ratio))
-
-}
-
 get_pca <- function(matrica, info){
+  # matrica <- filtruoti genai (yra pokytis)
+  # info <- SampleInfo, meginiu informacija su tiriama grupe ir meginio pavadinimu
 pca_result <- prcomp(t(matrica), scale. = TRUE)
 pca_df <- as.data.frame(pca_result$x)
 pca_df$Barcode <- rownames(pca_df)
@@ -119,6 +59,9 @@ ggplot(cor_df, aes(x = Var1, y = Var2, fill = value)) +
 
 
 get_near_table <- function(lncGR, geneGR){
+  # GRanges objektai
+  ## lncGR - atfiltruoti lncRNA
+  ## geneGR - visi baltyma koduojantys genai (suzinoti visus kaimynus)
 nearest_idx <- nearest(lncGR, geneGR)
 nearest_gene <- geneGR$gene_name[nearest_idx]
 distance_to_pc <- distance(lncGR, geneGR[nearest_idx])

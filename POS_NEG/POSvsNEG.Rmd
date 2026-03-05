@@ -2,7 +2,7 @@
 library(pacman)
 p_load(rtracklayer, GenomicRanges, dplyr, data.table, dplyr, DESeq2, ggplot2, ggrepel, tidyr, 
       readxl, biomaRt, clusterProfiler, org.Hs.eg.db, DT, ChIPseeker, TxDb.Hsapiens.UCSC.hg38.knownGene, 
-      pheatmap, flashClust, ggraph, ComplexHeatmap, gridExtra, grid, tidygraph)
+      pheatmap, flashClust, ggraph, ComplexHeatmap, gridExtra, grid, tidygraph, edgeR)
 knitr::opts_chunk$set(fig.width=6, fig.height=6, echo = T)
 pthres <- 0.1
 lfc <- log2(1.25)
@@ -70,6 +70,35 @@ resultsNames(dds)
 
 # Bendras mėginių pasižiūrėjimas {.tabset}
 Kaip kinta mRNA ir lncRNA tarp mėginių (ar yra atsiskyrimas pagal abu)
+
+## Koreliacija pagal mėginius
+Mėginiai atsiskiria į POS NEG grupės analizuojant tik lncRNA. 
+mRNA ir bendoroje (kartu su lncRNA) Atsiskyrimas matomas, bet T1 POS mėginiai panašumu linksta link NEG mėginių
+(koreliuoja labiau su NEG meginiais negu su POS)
+
+```{r, fig.height= 10, fig.width = 18}
+countai <- rbind(counts_lnc, counts_pc)
+countai_PosNeg <- countai[, c(1, 2, 5, 6, 3, 4, 7, 8)]
+counts_lnc_PosNeg <- counts_lnc[, c(1, 2, 5, 6, 3, 4, 7, 8)]
+counts_pc_PosNeg <- counts_pc[, c(1, 2, 5, 6, 3, 4, 7, 8)]
+
+a <- get_cor(counts_lnc_PosNeg, title = "lncRNA")
+b <-get_cor(counts_pc_PosNeg, title = "mRNA")
+c <-get_cor(countai_PosNeg, title = "Bendras")
+
+a | b| c
+```
+
+## PCA
+Pastebimas atsirymas tarp POS ir NEG grupių. Taip pat matomas atsiskyrimas teigiamoje grupėje
+tarp klonų. T1 linksta panašumju link NEG mėginių (PC2)
+```{r}
+mat <- rbind(mat_filt_lnc, mat_filt_pc)
+#get_pca(mat_filt_lnc, sampleInfo) + ggtitle("tik lncRNA")
+#get_pca(mat_filt_pc, sampleInfo)+ ggtitle("tik mRNA")
+get_pca(mat, sampleInfo) + ggtitle("Bendras")
+```
+
 ## Heatmap
 ```{r}
 annotation_col <- data.frame(Group = sampleInfo$Group)
@@ -100,7 +129,6 @@ jog yra atsiskyrimas tarp skirtingų klonų. Pastebima ir bendrame (su mRNA ir l
 
 ```{r, fig.height = 7, fig.width=18}
 rownames(annotation_col) <- sampleInfo$Barcode
-mat <- rbind(mat_filt_lnc, mat_filt_pc)
 p3 <- pheatmap(mat,
          scale = "row",
          annotation_col = annotation_col,
@@ -116,33 +144,6 @@ g2 <- grid.grabExpr(draw(p2))
 g3 <- grid.grabExpr(draw(p3))
 
 gridExtra::grid.arrange(g1, g2, g3, ncol = 3)
-```
-
-## Koreliacija pagal mėginius
-Mėginiai atsiskiria į POS NEG grupės analizuojant tik lncRNA. 
-mRNA ir bendoroje (kartu su lncRNA) Atsiskyrimas matomas, bet T1 POS mėginiai panašumu linksta link NEG mėginių
-(koreliuoja labiau su NEG meginiais negu su POS)
-
-```{r, fig.height= 10, fig.width = 18}
-countai <- rbind(counts_lnc, counts_pc)
-countai_PosNeg <- countai[, c(1, 2, 5, 6, 3, 4, 7, 8)]
-counts_lnc_PosNeg <- counts_lnc[, c(1, 2, 5, 6, 3, 4, 7, 8)]
-counts_pc_PosNeg <- counts_pc[, c(1, 2, 5, 6, 3, 4, 7, 8)]
-
-a <- get_cor(counts_lnc_PosNeg, title = "lncRNA")
-b <-get_cor(counts_pc_PosNeg, title = "mRNA")
-c <-get_cor(countai_PosNeg, title = "Bendras")
-
-a | b| c
-```
-
-## PCA
-Pastebimas atsirymas tarp POS ir NEG grupių. Taip pat matomas atsiskyrimas teigiamoje grupėje
-tarp klonų. T1 linksta panašumju link NEG mėginių (PC2)
-```{r}
-#get_pca(mat_filt_lnc, sampleInfo) + ggtitle("tik lncRNA")
-#get_pca(mat_filt_pc, sampleInfo)+ ggtitle("tik mRNA")
-get_pca(mat, sampleInfo) + ggtitle("Bendras")
 ```
 
 # Bendrai enrichment {.tabset}
@@ -164,7 +165,9 @@ go_enrich
 ```
 
 ## Pakitę baltymą koduojantys genai
+Padidėjusios raiškos susiję su sinapsine veikla/organizacija, neuroaktyviais ligandais
 
+Sumažėjusios raiškos susiję su ląstelių proliferacija, epiteliu, signaliniais keliais
 ```{r, fig.width=12}
 pc_names <- rownames(mat_pc)
 rownames(sig_pc_up) <- sub("\\..*$", "", sig_pc_up$rn)
@@ -217,7 +220,7 @@ entrezID <- mapIds(
 entrezID <- na.omit(entrezID)
 kegg <- enrichKEGG(gene         = entrezID,
                    organism     = 'hsa',
-                   pvalueCutoff = 0.05)
+                   pvalueCutoff = 0.07)
 b <- dotplot(kegg, showCategory=10) +ggtitle("KEGG su sumažėjusios raiškos genais")
 
 a | b
@@ -277,7 +280,7 @@ ggplot(ctx_df, aes(x = genomic_context, y = count, fill = genomic_context)) +
 ```
 
 
-## Šalia (100kb) lncRNA esančių baltymą koduojančių GO enrichment
+## Šalia (50kb) lncRNA esančių baltymą koduojančių GO enrichment
 Šalia lncRNA esantys pakitę baltymą koduoajntys genai susiję su sinapsių organizacija, struktūra ar aktyvumu.
 ```{r}
 # Artimiausi genai (cis, within 100kb)
@@ -313,6 +316,25 @@ pheatmap(cor_matrix,
          show_colnames = FALSE)
 ```
 
+Atmetus poveikio grupę, matomi klasteriai, kurie gali kinta kartu.
+```{r}
+Status <- factor(sampleInfo$Group, levels = c("POS", "NEG"))
+design <- model.matrix(~Status)
+fit <- lmFit(mat_filt_lnc, design)
+mat_lnc <- residuals.MArrayLM(fit, mat_filt_lnc)
+
+fit <- lmFit(mat_filt_pc, design)
+mat_pc <- residuals.MArrayLM(fit, mat_filt_pc)
+
+cor_matrix <- cor(t(mat_lnc), t(mat_pc), method = "spearman")
+cor_df <- reshape2::melt(cor_matrix)
+colnames(cor_df) <- c("lncRNA", "mRNA", "value")
+pheatmap(cor_matrix,
+         clustering_distance_rows = "euclidean",
+         clustering_distance_cols = "euclidean",
+         show_rownames = FALSE,
+         show_colnames = FALSE)
+```
 
 ## Stipriai koreliuojančių su lncRNA mRNA funckinė anotacija {.tabset}
 ### Lyginant abu ląstelių klonus kartu
@@ -363,7 +385,6 @@ Atfiltruoti koreliuojantys genai susiję su:
 - Nervų sistema (sąmonę, mokymasis, sinapsėm)
 
 - Kraujotakos sistema (kraujotakos reguliavimas)
-
 ```{r}
 ego <- enrichGO(unique_pc, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP")
 dotplot(ego, showCategory=10) + ggtitle("Atskirų koreliacijų GO")
@@ -379,8 +400,7 @@ g <- readRDS( "~/NB_lncRNA/output/code/BioInsights/graph/network_graph_PN.RDS")
 V(g)$name <- V(g)$symbol
 tg <- readRDS("~/NB_lncRNA/output/code/BioInsights/graph/tbl_PS.rds")
 ```
-## lncRNA ir mRNA tinklo analizė {.tabset}
-### Tinklas
+## lncRNA ir mRNA tinklas
 Turima 229 mazgus ir 527 ryšius tarp ilgųjų nekoduojančių RNR ir baltymų arba baltymo-baltymo
 
 Mazgai panašaus, nedidelio dydžio.
@@ -390,6 +410,7 @@ table(E(g)$edge_type)
 
 vcount(g)
 ecount(g)
+components(g)$csize
 ```
 ```{r, fig.height=10, fig.width=10}
 ggraph(tg, layout = "fr") +
@@ -443,11 +464,11 @@ top_lnc <- lnc_stats %>%
 
 top_lnc$name
 ```
-### lncRNA funkcijos priskyrimas pagal tinklą
+## lncRNA funkcijos priskyrimas pagal tinklą
 ```{r}
 lnc_enrichment_results <- readRDS("~/NB_lncRNA/output/code/BioInsights/graph/lncEn_PN.RDS")
 ```
-```{r}
+```{r, fig.height=12, fig.width= 12}
 top5_lnc <- top_lnc$symbol[1:5]
 
 library(cowplot)
@@ -457,10 +478,10 @@ plots <- lapply(top5_lnc, function(lnc){
   dotplot(ego, showCategory = 10, title = lnc) })
 
 plots <- plots[!sapply(plots, is.null)]
-plot_grid(plotlist = plots, ncol = 1) 
+plot_grid(plotlist = plots, ncol = 2) 
 ```
 
-### Lentelė su top lncRNA ir jų mRNA reguliacija
+## Lentelė su top lncRNA ir jų mRNA reguliacija 
 ```{r}
 geneGR_df <- as.data.frame(geneGR)
 res_pc <- sig %>%
@@ -511,4 +532,3 @@ lnc_mrna <- lnc_mrna_table %>%
 
 datatable(lnc_mrna, options = list(pageLength = 10, scrollX = TRUE))
 ```
-

@@ -3,7 +3,7 @@ Deguonies sąlygos (hypox- mažai deguonies, normox- normalus deguonies kiekis)
 library(pacman)
 p_load(rtracklayer, GenomicRanges, dplyr, data.table, dplyr, DESeq2, ggplot2, ggrepel, tidyr, 
       readxl, biomaRt, clusterProfiler, org.Hs.eg.db, DT, ChIPseeker, TxDb.Hsapiens.UCSC.hg38.knownGene, 
-      pheatmap, flashClust, ggraph, ComplexHeatmap, gridExtra, grid)
+      pheatmap, flashClust, ggraph, ComplexHeatmap, gridExtra, grid, edgeR)
 knitr::opts_chunk$set(fig.width=6, fig.height=6, echo = T)
 pthres <- 0.1
 lfc <- log2(1.25)
@@ -270,6 +270,25 @@ pheatmap(cor_matrix,
          show_colnames = FALSE)
 ```
 
+Atmetus poveikio grupę, matomi klasteriai, kurie gali kinta kartu.
+```{r}
+Status <- factor(sampleInfo$Group, levels = c("Hypox", "Normox"))
+design <- model.matrix(~Status)
+fit <- lmFit(mat_filt_lnc, design)
+mat_lnc <- residuals.MArrayLM(fit, mat_filt_lnc)
+
+fit <- lmFit(mat_filt_pc, design)
+mat_pc <- residuals.MArrayLM(fit, mat_filt_pc)
+
+cor_matrix <- cor(t(mat_lnc), t(mat_pc), method = "spearman")
+cor_df <- reshape2::melt(cor_matrix)
+colnames(cor_df) <- c("lncRNA", "mRNA", "value")
+pheatmap(cor_matrix,
+         clustering_distance_rows = "euclidean",
+         clustering_distance_cols = "euclidean",
+         show_rownames = FALSE,
+         show_colnames = FALSE)
+```
 
 ## Stipriai koreliuojančių su lncRNA mRNA funckinė anotacija {.tabset}
 ### Lyginant abu ląstelių klonus kartu
@@ -344,6 +363,7 @@ table(E(g)$edge_type)
 
 vcount(g)
 ecount(g)
+components(g)$csize
 ```
 ```{r, fig.height=10, fig.width=10}
 ggraph(tg, layout = "fr") +
@@ -389,7 +409,6 @@ lnc_stats <- node_stats %>%
 lnc_stats_clean <- lnc_stats[,c(3:11)]
 datatable(lnc_stats_clean, options = list(pageLength = 10, scrollX = TRUE))
 ```
-
 ```{r}
 threshold <- quantile(lnc_stats$regulatory_score, 0.75)
 
@@ -398,11 +417,12 @@ top_lnc <- lnc_stats %>%
 
 top_lnc$name
 ```
+
 ### lncRNA funkcijos priskyrimas pagal tinklą
 ```{r}
 lnc_enrichment_results <- readRDS("~/NB_lncRNA/output/code/BioInsights/graph/lncEn_TK.RDS")
 ```
-```{r, fig.height= 8, fig.width=10}
+```{r, fig.height=12, fig.width= 12}
 top5_lnc <- top_lnc$symbol[1:5]
 
 library(cowplot)

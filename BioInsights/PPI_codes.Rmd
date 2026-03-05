@@ -1,12 +1,4 @@
-```{r}
-# Protein-Protein Interaction (Baltymo-Baltymo sąveikas) nagrinėti + per koreliacijas prie susidariųsių genų grupių pridėti lncRNA
-# Kodas didesniems setams (bent 8 mėginiai)
-# Pakaita populiariam WGCNA (jam reikia 15 mėginių)
 
-
-# KEIČIAM PAVADINIMUS
-#dir.create("~/NB_lncRNA/output/code/something/something", recursive = TRUE)
-```
 
 # GRanges
 ```{r}

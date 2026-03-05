@@ -4,7 +4,7 @@ Normox Control (Batimastat vs Control Normox salygomis)
 library(pacman)
 p_load(rtracklayer, GenomicRanges, dplyr, data.table, dplyr, DESeq2, ggplot2, ggrepel, tidyr, 
       readxl, biomaRt, clusterProfiler, org.Hs.eg.db, DT, ChIPseeker, TxDb.Hsapiens.UCSC.hg38.knownGene, 
-      pheatmap, flashClust, ggraph, ComplexHeatmap, gridExtra, grid)
+      pheatmap, flashClust, ggraph, ComplexHeatmap, gridExtra, grid, edgeR)
 knitr::opts_chunk$set(fig.width=6, fig.height=6, echo = T)
 pthres <- 0.1
 lfc <- log2(1.25)
@@ -232,11 +232,30 @@ go_res
 
 # Koreliacija {.tabset}
 ## Pagal raišką
-Pagrinde mRNA koreliuojant su lncRNA suddaro du blokus
-
+Pagrinde mRNA koreliuojant su lncRNA sudaro du blokus - dvi pagrindinės poveikio grupės (yra/nėra)
 Matomi ir mažesni koreliacijas blokai.
 ```{r}
 cor_matrix <- cor(t(mat_filt_lnc), t(mat_filt_pc), method = "spearman")
+cor_df <- reshape2::melt(cor_matrix)
+colnames(cor_df) <- c("lncRNA", "mRNA", "value")
+pheatmap(cor_matrix,
+         clustering_distance_rows = "euclidean",
+         clustering_distance_cols = "euclidean",
+         show_rownames = FALSE,
+         show_colnames = FALSE)
+```
+
+Atmetus poveikio grupę, matomi klasteriai, kurie gali kinta kartu.
+```{r}
+Status <- factor(sampleInfo$Group, levels = c("Batimastat", "control"))
+design <- model.matrix(~Status)
+fit <- lmFit(mat_filt_lnc, design)
+mat_lnc <- residuals.MArrayLM(fit, mat_filt_lnc)
+
+fit <- lmFit(mat_filt_pc, design)
+mat_pc <- residuals.MArrayLM(fit, mat_filt_pc)
+
+cor_matrix <- cor(t(mat_lnc), t(mat_pc), method = "spearman")
 cor_df <- reshape2::melt(cor_matrix)
 colnames(cor_df) <- c("lncRNA", "mRNA", "value")
 pheatmap(cor_matrix,
@@ -287,7 +306,7 @@ table(E(g)$edge_type)
 
 vcount(g)
 ecount(g)
-components(g)
+components(g)$csize
 ```
 ```{r, fig.height=10, fig.width=10}
 ggraph(tg, layout = "fr") +
@@ -346,7 +365,7 @@ top_lnc$name
 ```{r}
 lnc_enrichment_results <- readRDS("~/NB_lncRNA/output/code/BioInsights/graph/lncEn_NBC.RDS")
 ```
-```{r, fig.width=9}
+```{r, fig.height=12, fig.width= 12}
 top5_lnc <- top_lnc$symbol[1:5]
 
 library(cowplot)
