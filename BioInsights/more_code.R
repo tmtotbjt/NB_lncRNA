@@ -108,3 +108,80 @@ final_table <- final_table %>%
   slice_min(distance) %>%
   ungroup()
 }
+
+plot_heatmap <- function(mat, title_name, annotation_col, ann_colors) {
+  pheatmap(mat,
+           scale = "row",
+           annotation_col = annotation_col,
+           annotation_colors = ann_colors,
+           show_rownames = FALSE,
+           cluster_rows = TRUE,
+           cluster_cols = TRUE,
+           main = title_name,
+           silent = TRUE)
+}
+
+get_plot <- function(x) {
+ ggplot(x, aes(x = genomic_context, y = count, fill = genomic_context)) +
+  geom_col() +
+  geom_label(aes(label = count),
+             fill = "white",
+             color = "black",
+             size = 4,
+             label.size = 0.7,
+             show.legend = FALSE) +
+  coord_flip() +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  labs(x = "Genomic context", y = "Count", title= "Genominis kontekstas DE lncRNA") +
+  theme_minimal(base_size = 14) +
+  theme(axis.text.y = element_text(size = 15),
+        axis.title = element_text(size = 15),
+        legend.position = "none",
+        plot.title = element_text(size=15))
+}
+
+cor_heatmap <- function(x, title_name) {
+  pheatmap(x,
+         clustering_distance_rows = "euclidean",
+         clustering_distance_cols = "euclidean",
+         show_rownames = FALSE,
+         show_colnames = FALSE,
+        main = title_name)
+}
+
+tinklas <- function(x) {
+  # x <- tg
+  ggraph(x, layout = "fr") +
+  geom_edge_link(aes(color = edge_type), alpha = 0.3) +
+  geom_node_point(aes(color = type, size = degree, shape = type)) +
+  geom_node_text(aes(label = symbol), repel = TRUE, size = 3) +
+  scale_color_manual(values = c("lncRNA" = "orange", "protein" = "skyblue")) +
+  scale_edge_color_manual(values = c("lncRNA_corr" = "red", "PPI" = "#261ace")) +
+  scale_shape_manual(values = c("lncRNA" = 17, "protein" = 16)) +
+  theme_void() +
+  ggtitle("lncRNA-PPI Network with Modules and Hubs")
+}
+
+
+TOP_tinklas <- function(x, top_names) {
+  x <- x %>%
+  activate(nodes) %>%
+  mutate(type2 = case_when(
+    name %in% top_names ~ "top_lncRNA",
+    type == "lncRNA" ~ "lncRNA",
+    TRUE ~ "protein"
+  ))
+
+  ggraph(x, layout = "fr") +
+    geom_edge_link(aes(color = edge_type), alpha = 0.3) +
+    geom_node_point(aes(color = type2, shape = type)) +
+    geom_node_text(aes(label = symbol), repel = TRUE, size = 3) +
+    scale_color_manual(values = c(
+  "top_lncRNA" = "#ff2579",
+  "lncRNA" = "orange",
+  "protein" = "skyblue"
+)) +
+    scale_edge_color_manual(values = c("lncRNA_corr" = "#ff7f7f", "PPI" = "blue")) +
+    scale_shape_manual(values = c("lncRNA" = 17, "protein" = 16)) +
+    theme_void()
+}

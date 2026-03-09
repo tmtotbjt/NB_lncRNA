@@ -103,25 +103,8 @@ get_pca(mat, sampleInfo) + ggtitle("Bendras")
 ```{r}
 annotation_col <- data.frame(Group = sampleInfo$Group)
 ann_colors = list(Group = c(NEG="cyan", POS="lightpink"))
-p1 <- pheatmap(mat_filt_pc,
-         scale = "row",
-         annotation_col = annotation_col,
-         annotation_colors = ann_colors,
-         show_rownames = FALSE,
-         cluster_rows = TRUE,
-         cluster_cols = TRUE,
-         main = "mRNA",
-         silent = TRUE)
-
-p2 <- pheatmap(mat_filt_lnc,
-         scale = "row",
-         annotation_col = annotation_col,
-         annotation_colors = ann_colors,
-         show_rownames = FALSE,
-         cluster_rows = TRUE,
-         cluster_cols = TRUE,
-         main= "lncRNA",
-         silent = TRUE)
+p1 <- plot_heatmap(mat_filt_pc, "mRNA", annotation_col, ann_colors)
+p2 <- plot_heatmap(mat_filt_lnc, "lncRNA", annotation_col, ann_colors)
 ```
 
 Bendrai mėginiai atsiskiria pagal POS ir NEG grupes, bet is mRNR (ir šiek tiek iš lncRNA) šilumos žemėlapio matoma,
@@ -129,15 +112,7 @@ jog yra atsiskyrimas tarp skirtingų klonų. Pastebima ir bendrame (su mRNA ir l
 
 ```{r, fig.height = 7, fig.width=18}
 rownames(annotation_col) <- sampleInfo$Barcode
-p3 <- pheatmap(mat,
-         scale = "row",
-         annotation_col = annotation_col,
-         annotation_colors = ann_colors,
-         show_rownames = FALSE,
-         cluster_rows = TRUE,
-         cluster_cols = TRUE,
-         main= "bendras",
-         silent = TRUE)
+p3 <- plot_heatmap(mat, "bendras", annotation_col, ann_colors)
 
 g1 <- grid.grabExpr(draw(p1))
 g2 <- grid.grabExpr(draw(p2))
@@ -258,28 +233,6 @@ datatable(final_table, class = 'cell-border stripe', , rownames = FALSE)
 table(final_table$genomic_context)
 ```
 
-```{r}
-ctx_df <- as.data.frame(table(final_table$genomic_context))
-colnames(ctx_df) <- c("genomic_context", "count")
-ggplot(ctx_df, aes(x = genomic_context, y = count, fill = genomic_context)) +
-  geom_col() +
-  geom_label(aes(label = count),
-             fill = "white",
-             color = "black",
-             size = 4,
-             label.size = 0.7,
-             show.legend = FALSE) +
-  coord_flip() +
-  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
-  labs(x = "Genomic context", y = "Count", title= "Genominis kontekstas DE lncRNA") +
-  theme_minimal(base_size = 14) +
-  theme(axis.text.y = element_text(size = 15),
-        axis.title = element_text(size = 15),
-        legend.position = "none",
-        plot.title = element_text(size=15))
-```
-
-
 ## Šalia (50kb) lncRNA esančių baltymą koduojančių GO enrichment
 Šalia lncRNA esantys pakitę baltymą koduoajntys genai susiję su sinapsių organizacija, struktūra ar aktyvumu.
 ```{r}
@@ -307,13 +260,7 @@ Taip pat pastebimi smulkesni kalsteriai.
 Gali būti stebimi klasteriai, kurie atsirado ne dėl POS NEG skirtumų, bet dėl skirtumų tarp kolnų.
 ```{r}
 cor_matrix <- cor(t(mat_filt_lnc), t(mat_filt_pc), method = "spearman")
-cor_df <- reshape2::melt(cor_matrix)
-colnames(cor_df) <- c("lncRNA", "mRNA", "value")
-pheatmap(cor_matrix,
-         clustering_distance_rows = "euclidean",
-         clustering_distance_cols = "euclidean",
-         show_rownames = FALSE,
-         show_colnames = FALSE)
+p1 <- cor_heatmap(cor_matrix, "Su efektu")
 ```
 
 Atmetus poveikio grupę, matomi klasteriai, kurie gali kinta kartu.
@@ -329,17 +276,20 @@ mat_pc <- residuals.MArrayLM(fit, mat_filt_pc)
 cor_matrix <- cor(t(mat_lnc), t(mat_pc), method = "spearman")
 cor_df <- reshape2::melt(cor_matrix)
 colnames(cor_df) <- c("lncRNA", "mRNA", "value")
-pheatmap(cor_matrix,
-         clustering_distance_rows = "euclidean",
-         clustering_distance_cols = "euclidean",
-         show_rownames = FALSE,
-         show_colnames = FALSE)
+p2 <- cor_heatmap(cor_matrix, "Be efekto")
+```
+
+```{r, fig.width=12}
+g1 <- grid.grabExpr(draw(p1))
+g2 <- grid.grabExpr(draw(p2))
+
+gridExtra::grid.arrange(g1, g2, ncol = 2)
 ```
 
 ## Stipriai koreliuojančių su lncRNA mRNA funckinė anotacija {.tabset}
 ### Lyginant abu ląstelių klonus kartu
 ```{r}
-# Pasidaryti atskirus tegiamai ir neigiamai koreliuojantiems (?)
+# Pasidaryti atskirus tegiamai ir neigiamai koreliuojantiems ?
 cor_df_sig <- subset(cor_df, abs(value) > 0.85)
 
 rownames(sig_lnc_up) <- sub("\\..*$", "", rownames(sig_lnc_up))
@@ -377,7 +327,6 @@ common_pairs <- inner_join(poros_T, poros_K, by = c("lncRNA", "mRNA"))
 unique_pc <- unique(common_pairs$mRNA)
 unique_pc <- sub("\\..*$", "", unique_pc)
 ```
-
 Atfiltruoti koreliuojantys genai susiję su:
 
 - Membrana (medžiagų pernaša, potencialas)
@@ -400,7 +349,7 @@ g <- readRDS( "~/NB_lncRNA/output/code/BioInsights/graph/network_graph_PN.RDS")
 V(g)$name <- V(g)$symbol
 tg <- readRDS("~/NB_lncRNA/output/code/BioInsights/graph/tbl_PS.rds")
 ```
-## lncRNA ir mRNA tinklas
+## lncRNA charakteristikos
 Turima 229 mazgus ir 527 ryšius tarp ilgųjų nekoduojančių RNR ir baltymų arba baltymo-baltymo
 
 Mazgai panašaus, nedidelio dydžio.
@@ -411,17 +360,6 @@ table(E(g)$edge_type)
 vcount(g)
 ecount(g)
 components(g)$csize
-```
-```{r, fig.height=10, fig.width=10}
-ggraph(tg, layout = "fr") +
-  geom_edge_link(aes(color = edge_type), alpha = 0.3) +
-  geom_node_point(aes(color = type, size = degree, shape = type)) +
-  geom_node_text(aes(label = symbol), repel = TRUE, size = 3) +
-  scale_color_manual(values = c("lncRNA" = "orange", "protein" = "skyblue")) +
-  scale_edge_color_manual(values = c("lncRNA_corr" = "red", "PPI" = "#261ace")) +
-  scale_shape_manual(values = c("lncRNA" = 17, "protein" = 16)) +
-  theme_void() +
-  ggtitle("lncRNA-PPI Network with Modules and Hubs")
 ```
 - Degree -> skaičius ryšių vienai lncRNA (top 10 su didžiausių skaičumi ryšių)
 
@@ -435,12 +373,12 @@ Atrenkamos lncRNA, kurios gali būti reguliatoriais
 ```{r}
 library(tidygraph)
 library(dplyr)
-tg <- tg %>%
+tg_tb <- tg %>%
   activate(nodes) %>%
   mutate(degree = centrality_degree(),
          betweenness = centrality_betweenness(),
          eigenvector = centrality_eigen() )
-node_stats <- tg %>%
+node_stats <- tg_tb %>%
   activate(nodes) %>%
   as_tibble()
 
@@ -456,6 +394,9 @@ lnc_stats <- node_stats %>%
 lnc_stats_clean <- lnc_stats[,c(3:11)]
 datatable(lnc_stats_clean, options = list(pageLength = 10, scrollX = TRUE))
 ```
+
+## Tinklas
+Top lncRNA
 ```{r}
 threshold <- quantile(lnc_stats$regulatory_score, 0.75)
 
@@ -464,6 +405,31 @@ top_lnc <- lnc_stats %>%
 
 top_lnc$name
 ```
+
+```{r, fig.height=10, fig.width=10}
+top_lnc <- head(top_lnc, n=15)
+ids <- V(g)[name %in% top_lnc$name]
+
+neighbors <- unique(unlist(ego(g, order = 1, nodes = ids)))
+
+subgraph <- induced_subgraph(g, neighbors) %>%
+  as_tbl_graph()
+
+protein_threshold <- quantile(
+    subgraph %>% 
+    activate(nodes) %>% 
+    as_tibble() %>% 
+    filter(type == "protein") %>% 
+    pull(degree),
+    0.75 )
+
+subgraph <- subgraph %>%
+  activate(nodes) %>%
+  filter(type == "lncRNA" | degree >= protein_threshold)
+
+tinklas(subgraph)
+```
+
 ## lncRNA funkcijos priskyrimas pagal tinklą
 ```{r}
 lnc_enrichment_results <- readRDS("~/NB_lncRNA/output/code/BioInsights/graph/lncEn_PN.RDS")

@@ -75,39 +75,14 @@ Matomas aytsiskyrimas tarp klonų
 ```{r}
 annotation_col <- data.frame(Group = sampleInfo$Group)
 ann_colors = list(Group = c(Batimastat="cyan", control="lightpink"))
-p1 <- pheatmap(mat_filt_pc,
-         scale = "row",
-         annotation_col = annotation_col,
-         annotation_colors = ann_colors,
-         show_rownames = FALSE,
-         cluster_rows = TRUE,
-         cluster_cols = TRUE,
-         main = "mRNA",
-         silent = TRUE)
-
-p2 <- pheatmap(mat_filt_lnc,
-         scale = "row",
-         annotation_col = annotation_col,
-         annotation_colors = ann_colors,
-         show_rownames = FALSE,
-         cluster_rows = TRUE,
-         cluster_cols = TRUE,
-         main= "lncRNA",
-         silent = TRUE)
+p1 <- plot_heatmap(mat_filt_pc, "mRNA", annotation_col, ann_colors)
+p2 <- plot_heatmap(mat_filt_lnc, "lncRNA", annotation_col, ann_colors)
 ```
 
 ```{r, fig.height = 7, fig.width=18}
 rownames(annotation_col) <- sampleInfo$Barcode
 mat <- rbind(mat_filt_lnc, mat_filt_pc)
-p3 <- pheatmap(mat,
-         scale = "row",
-         annotation_col = annotation_col,
-         annotation_colors = ann_colors,
-         show_rownames = FALSE,
-         cluster_rows = TRUE,
-         cluster_cols = TRUE,
-         main= "bendras",
-         silent = TRUE)
+p3 <- plot_heatmap(mat, "bendras", annotation_col, ann_colors)
 
 g1 <- grid.grabExpr(draw(p1))
 g2 <- grid.grabExpr(draw(p2))
@@ -238,11 +213,7 @@ Matomi ir mažesni koreliacijas blokai.
 cor_matrix <- cor(t(mat_filt_lnc), t(mat_filt_pc), method = "spearman")
 cor_df <- reshape2::melt(cor_matrix)
 colnames(cor_df) <- c("lncRNA", "mRNA", "value")
-pheatmap(cor_matrix,
-         clustering_distance_rows = "euclidean",
-         clustering_distance_cols = "euclidean",
-         show_rownames = FALSE,
-         show_colnames = FALSE)
+p1 <- cor_heatmap(cor_matrix, "Su efektu")
 ```
 
 Atmetus poveikio grupę, matomi klasteriai, kurie gali kinta kartu.
@@ -258,13 +229,15 @@ mat_pc <- residuals.MArrayLM(fit, mat_filt_pc)
 cor_matrix <- cor(t(mat_lnc), t(mat_pc), method = "spearman")
 cor_df <- reshape2::melt(cor_matrix)
 colnames(cor_df) <- c("lncRNA", "mRNA", "value")
-pheatmap(cor_matrix,
-         clustering_distance_rows = "euclidean",
-         clustering_distance_cols = "euclidean",
-         show_rownames = FALSE,
-         show_colnames = FALSE)
+p2 <- cor_heatmap(cor_matrix, "Be efekto")
 ```
 
+```{r, fig.width=12}
+g1 <- grid.grabExpr(draw(p1))
+g2 <- grid.grabExpr(draw(p2))
+
+gridExtra::grid.arrange(g1, g2, ncol = 2)
+```
 
 ## Stipriai koreliuojančių su lncRNA mRNA funckinė anotacija
 Pagrinde genai susiję su atsaku į deguonies lygį ir metaboliniais procesais.
@@ -296,7 +269,7 @@ g <- readRDS( "~/NB_lncRNA/output/code/BioInsights/graph/network_graph_NBC.RDS")
 V(g)$name <- V(g)$symbol
 tg <- readRDS("~/NB_lncRNA/output/code/BioInsights/graph/tbl_NBC.rds")
 ```
-## lncRNA ir mRNA tinklas
+## lncRNA charakteristikos
 Turima 51 mazgą ir 74 ryšius tarp ilgųjų nekoduojančių RNR ir baltymų arba baltymo-baltymo
 
 Yra vienas didelis mazgas (47 kompenentai) ir du mažesni.
@@ -307,17 +280,6 @@ table(E(g)$edge_type)
 vcount(g)
 ecount(g)
 components(g)$csize
-```
-```{r, fig.height=10, fig.width=10}
-ggraph(tg, layout = "fr") +
-  geom_edge_link(aes(color = edge_type), alpha = 0.3) +
-  geom_node_point(aes(color = type, size = degree, shape = type)) +
-  geom_node_text(aes(label = symbol), repel = TRUE, size = 3) +
-  scale_color_manual(values = c("lncRNA" = "orange", "protein" = "skyblue")) +
-  scale_edge_color_manual(values = c("lncRNA_corr" = "red", "PPI" = "#261ace")) +
-  scale_shape_manual(values = c("lncRNA" = 17, "protein" = 16)) +
-  theme_void() +
-  ggtitle("lncRNA-PPI Network with Modules and Hubs")
 ```
 - Degree -> skaičius ryšių vienai lncRNA (top 10 su didžiausių skaičumi ryšių)
 
@@ -361,6 +323,12 @@ top_lnc <- lnc_stats %>%
 
 top_lnc$name
 ```
+
+## Tinklas
+```{r, fig.height=10, fig.width=10}
+TOP_tinklas(tg, top_lnc$name)
+```
+
 ## lncRNA funkcijos priskyrimas pagal tinklą
 ```{r}
 lnc_enrichment_results <- readRDS("~/NB_lncRNA/output/code/BioInsights/graph/lncEn_NBC.RDS")
@@ -378,6 +346,7 @@ plots <- lapply(top5_lnc, function(lnc){
 plots <- plots[!sapply(plots, is.null)]
 plot_grid(plotlist = plots, ncol = 2) 
 ```
+
 ## Lentelė su top lncRNA ir jų mRNA reguliacija
 ```{r}
 geneGR_df <- as.data.frame(geneGR)

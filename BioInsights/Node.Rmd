@@ -9,7 +9,7 @@ library(pacman)
 p_load(dplyr, igraph, ggraph, tidygraph, STRINGdb, clusterProfiler, org.Hs.eg.db)
 ```
 
-Pašalinimas treatment effect sužinoti galimas reguliacijas apkitusių genų per koreliacijas
+Pašalinimas treatment effect sužinoti galimas reguliacijas pakitusių genų per koreliacijas
 ```{r}
 mat <- rbind(mat_filt_lnc, mat_filt_pc)
 Status <- factor(sampleInfo$Group, levels = c("Batimastat", "control"))
@@ -54,7 +54,7 @@ lncGR <- GRanges(
 lncGR <- lncGR[lncGR$gene_id %in% sig_lncRNAs$rn, ] #keiciam rn i rownames ir atv
 
 ### pasikeisk pav
-#saveRDS(lncGR, "~/NB_lncRNA/output/code/BioInsights//lncGR.RDS")
+#saveRDS(lncGR, "~/NB_lncRNA/output/code/BioInsights/Bastimat/lncGR_HBC.RDS")
 ### pasikeisk pav
 
 
@@ -68,7 +68,7 @@ geneGR <- GRanges(
 geneGR <- geneGR[geneGR$gene_id %in% sig$rn, ]
 
 ### pasikeisk pav
-#saveRDS(geneGR, "~/NB_lncRNA/output/code/BioInsights//geneGR.RDS")
+#saveRDS(geneGR, "~/NB_lncRNA/output/code/BioInsights/Bastimat/geneGR_HBC.RDS")
 ### pasikeisk pav
 ```
 
@@ -108,7 +108,10 @@ colnames(sig_links)[colnames(sig_links) == "gene_name"] <- "lncRNA"
 sig_links <- sig_links[,c(5, 4, 3)]
 ```
 
-Sumapinimas baltymą koduojančių genų pagal duomenų bazę, kuri pasako, kas tarpusavyje (baltymai) sąveikauja (pagal eksperimentinius duomenis)
+Sumapinimas baltymą koduojančių genų pagal duomenų bazę, kuri pasako, 
+kas tarpusavyje (kokie baltymai) sąveikauja (pagal eksperimentinius duomenis).
+
+Sukuriamas grafikas su mazgais (lncRNA/baltymai) ir kraštais (koreliacijos/PPI).
 ```{r}
 # Duomenų bazės įkėlimas
 string_db <- STRINGdb$new(version="12.0", 
@@ -186,21 +189,21 @@ summary(deg)
 
 top 10 lncRNA su didžiausiu ryšių skaičiumi
 ```{r}
-lnc_hubs <- sort(deg[V(g)$type=="lncRNA"], decreasing=TRUE)[1:10]
+lnc_hubs <- sort(deg[V(g)$type=="lncRNA"], decreasing=TRUE)
 lnc_hubs
 ```
 
 top 10 baltymą koduojančių genų su didžiausiu ryšių skaičiumi
 ```{r}
 names(deg) <- V(g)$symbol
-prot_hubs <- sort(deg[V(g)$type=="protein"], decreasing=TRUE)[1:10]
+prot_hubs <- sort(deg[V(g)$type=="protein"], decreasing=TRUE)
 prot_hubs
 ```
 
 Didžioji dalis tinklo yra sutelkta keliuose dideliuose moduliuose, o likusi dalis – mažuose klasteriuose.
 ```{r}
 bet <- betweenness(g)
-top_bet <- sort(bet, decreasing = TRUE)[1:10]
+top_bet <- sort(bet, decreasing = TRUE)
 
 
 cl <- cluster_louvain(g)
@@ -321,5 +324,5 @@ for (lnc in top_lnc$symbol) {
 }
 
 lnc_enrichment_results
-saveRDS(lnc_enrichment_results, "~/NB_lncRNA/output/code/BioInsights/graph/lncEn_HBC.RDS")
+# saveRDS(lnc_enrichment_results, "~/NB_lncRNA/output/code/BioInsights/graph/lncEn_HBC.RDS")
 ```

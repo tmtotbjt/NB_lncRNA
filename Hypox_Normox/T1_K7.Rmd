@@ -43,7 +43,6 @@ sig_lncRNAs <- as.data.frame(sig_lncRNAs)
 mat_filt_lnc <- mat[rownames(mat) %in% sig_lncRNAs$rn, ]
 rownames(mat_filt_lnc) <- sub("\\..*$", "", rownames(mat_filt_lnc))
 ```
-
 ```{r}
 #Protein coding
 duomenys <- readRDS("~/NB_lncRNA/input/data2DEG_protein.RDS")
@@ -73,39 +72,14 @@ Matomas atsiskyrimas klonų viduje (nedidelis).
 ```{r}
 annotation_col <- data.frame(Group = sampleInfo$Group)
 ann_colors = list(Group = c(Hypox="cyan", Normox="lightpink"))
-p1 <- pheatmap(mat_filt_pc,
-         scale = "row",
-         annotation_col = annotation_col,
-         annotation_colors = ann_colors,
-         show_rownames = FALSE,
-         cluster_rows = TRUE,
-         cluster_cols = TRUE,
-         main = "mRNA",
-         silent = TRUE)
-
-p2 <- pheatmap(mat_filt_lnc,
-         scale = "row",
-         annotation_col = annotation_col,
-         annotation_colors = ann_colors,
-         show_rownames = FALSE,
-         cluster_rows = TRUE,
-         cluster_cols = TRUE,
-         main= "lncRNA",
-         silent = TRUE)
+p1 <- plot_heatmap(mat_filt_pc, "mRNA", annotation_col, ann_colors)
+p2 <- plot_heatmap(mat_filt_lnc, "lncRNA", annotation_col, ann_colors)
 ```
 
 ```{r, fig.height = 7, fig.width=18}
 rownames(annotation_col) <- sampleInfo$Barcode
 mat <- rbind(mat_filt_lnc, mat_filt_pc)
-p3 <- pheatmap(mat,
-         scale = "row",
-         annotation_col = annotation_col,
-         annotation_colors = ann_colors,
-         show_rownames = FALSE,
-         cluster_rows = TRUE,
-         cluster_cols = TRUE,
-         main= "bendras",
-         silent = TRUE)
+p3 <- plot_heatmap(mat, "bendras", annotation_col, ann_colors)
 
 g1 <- grid.grabExpr(draw(p1))
 g2 <- grid.grabExpr(draw(p2))
@@ -255,19 +229,12 @@ go_res <- as.data.frame(go_res) %>% dplyr::select(Procesai = Description)
 go_res
 ```
 
-
 # Koreliacija {.tabset}
 ## Pagal raišką
 Matoma, jog yra tarpusavyje koreliuojančių lncRNA su mRNA (matomas grupių susidarymas).
 ```{r}
 cor_matrix <- cor(t(mat_filt_lnc), t(mat_filt_pc), method = "spearman")
-cor_df <- reshape2::melt(cor_matrix)
-colnames(cor_df) <- c("lncRNA", "mRNA", "value")
-pheatmap(cor_matrix,
-         clustering_distance_rows = "euclidean",
-         clustering_distance_cols = "euclidean",
-         show_rownames = FALSE,
-         show_colnames = FALSE)
+p1 <- cor_heatmap(cor_matrix, "Su efektu")
 ```
 
 Atmetus poveikio grupę, matomi klasteriai, kurie gali kinta kartu.
@@ -283,11 +250,13 @@ mat_pc <- residuals.MArrayLM(fit, mat_filt_pc)
 cor_matrix <- cor(t(mat_lnc), t(mat_pc), method = "spearman")
 cor_df <- reshape2::melt(cor_matrix)
 colnames(cor_df) <- c("lncRNA", "mRNA", "value")
-pheatmap(cor_matrix,
-         clustering_distance_rows = "euclidean",
-         clustering_distance_cols = "euclidean",
-         show_rownames = FALSE,
-         show_colnames = FALSE)
+p2 <- cor_heatmap(cor_matrix, "Be efekto")
+```
+```{r, fig.width=12}
+g1 <- grid.grabExpr(draw(p1))
+g2 <- grid.grabExpr(draw(p2))
+
+gridExtra::grid.arrange(g1, g2, ncol = 2)
 ```
 
 ## Stipriai koreliuojančių su lncRNA mRNA funckinė anotacija {.tabset}
@@ -352,8 +321,7 @@ g <- readRDS( "~/NB_lncRNA/output/code/BioInsights/graph/network_graph_TK.RDS")
 V(g)$name <- V(g)$symbol
 tg <- readRDS("~/NB_lncRNA/output/code/BioInsights/graph/tbl_TK.rds")
 ```
-## lncRNA ir mRNA tinklo analizė {.tabset}
-### Tinklas
+## lncRNA charakteristikos
 Turima 169 mazgus ir 213 ryšius tarp ilgųjų nekoduojančių RNR ir baltymų arba baltymo-baltymo
 
 Mazgai panašaus, nedidelio dydžio.
@@ -365,17 +333,7 @@ vcount(g)
 ecount(g)
 components(g)$csize
 ```
-```{r, fig.height=10, fig.width=10}
-ggraph(tg, layout = "fr") +
-  geom_edge_link(aes(color = edge_type), alpha = 0.3) +
-  geom_node_point(aes(color = type, size = degree, shape = type)) +
-  geom_node_text(aes(label = symbol), repel = TRUE, size = 3) +
-  scale_color_manual(values = c("lncRNA" = "orange", "protein" = "skyblue")) +
-  scale_edge_color_manual(values = c("lncRNA_corr" = "red", "PPI" = "#261ace")) +
-  scale_shape_manual(values = c("lncRNA" = 17, "protein" = 16)) +
-  theme_void() +
-  ggtitle("lncRNA-PPI Network with Modules and Hubs")
-```
+
 - Degree -> skaičius ryšių vienai lncRNA (top 10 su didžiausių skaičumi ryšių)
 
 - Betweenness -> trumpiausias atstumas tinkle (tiltas kitų elementų sujungimui tinkle)
@@ -409,6 +367,9 @@ lnc_stats <- node_stats %>%
 lnc_stats_clean <- lnc_stats[,c(3:11)]
 datatable(lnc_stats_clean, options = list(pageLength = 10, scrollX = TRUE))
 ```
+
+## Tinklas
+Top lncRNAs
 ```{r}
 threshold <- quantile(lnc_stats$regulatory_score, 0.75)
 
@@ -417,8 +378,11 @@ top_lnc <- lnc_stats %>%
 
 top_lnc$name
 ```
+```{r, fig.height=10, fig.width=10}
+TOP_tinklas(tg, top_lnc$name)
+```
 
-### lncRNA funkcijos priskyrimas pagal tinklą
+## lncRNA funkcijos priskyrimas pagal tinklą
 ```{r}
 lnc_enrichment_results <- readRDS("~/NB_lncRNA/output/code/BioInsights/graph/lncEn_TK.RDS")
 ```
@@ -435,7 +399,7 @@ plots <- plots[!sapply(plots, is.null)]
 plot_grid(plotlist = plots, ncol = 2) 
 ```
 
-### Lentelė su top lncRNA ir jų mRNA reguliacija
+## Lentelė su top lncRNA ir jų mRNA reguliacija
 ```{r}
 geneGR_df <- as.data.frame(geneGR)
 res_pc <- sig %>%
@@ -475,6 +439,12 @@ lnc_mrna_table <- do.call(rbind, lapply(lnc_nodes$symbol, function(lnc) {
 mRNA_reg <- res_pc %>%
   select(symbol, log2FoldChange) %>%
   mutate(mRNA_direction = ifelse(log2FoldChange > 0, "up", "down"))
+mRNA_reg$symbol[mRNA_reg$symbol == "ENSG00000286235"] <- "MCM8-2"
+mRNA_reg$symbol[mRNA_reg$symbol == "ENSG00000284931"] <- "ENSP00000496470"
+
+mRNA_reg$symbol[mRNA_reg$symbol == "ENSG00000256349"] <- "ENSP00000398526"
+mRNA_reg$symbol[mRNA_reg$symbol == "ENSG00000254692"] <- "E9PSI1_HUMAN"
+
 
 lnc_mrna_table <- lnc_mrna_table %>%
   left_join(lnc_reg %>% select(symbol, lnc_direction), by = c("lncRNA" = "symbol")) %>%
