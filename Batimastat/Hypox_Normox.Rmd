@@ -272,15 +272,16 @@ V(g)$name <- V(g)$symbol
 tg <- readRDS("~/NB_lncRNA/output/code/BioInsights/graph/tbl_HN.rds")
 ```
 ## lncRNA ir mRNA tinklas
-Turima 53 mazgus ir 5 ryšius tarp ilgųjų nekoduojančių RNR ir baltymų arba baltymo-baltymo
-
-Yra vienas didelis mazgas (35 kompenentai) ir keli mažesni.
+Turima 48 mazgus ir 48 ryšius tarp ilgųjų nekoduojančių RNR ir baltymų arba baltymo-baltymo
 ```{r}
 table(V(g)$type)
-table(E(g)$edge_type)
-
 vcount(g)
+
+table(E(g)$edge_type)
 ecount(g)
+```
+Keli didesni ir kiti mažesni tinklai (pagal komponentų viename tinkle sk.)
+```{r}
 components(g)$csize
 ```
 - Degree -> skaičius ryšių vienai lncRNA (top 10 su didžiausių skaičumi ryšių)
@@ -353,6 +354,9 @@ plot_grid(plotlist = plots, ncol = 2)
 ## Lentelė su top lncRNA ir jų mRNA reguliacija
 Lentelė su top lncRNA tinkle
 ```{r}
+lncGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/Bastimat/lncGR_HN_padj.RDS")
+geneGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/Bastimat/geneGR_HN_padj.RDS")
+
 geneGR_df <- as.data.frame(geneGR)
 res_pc <- sig %>%
   mutate(symbol = geneGR_df$gene_name[match(rn, geneGR_df$gene_id)]) %>%

@@ -8,7 +8,6 @@ pthres <- 0.1
 lfc <- log2(1.25)
 source("~/NB_lncRNA/code/BioInsights/more_code.R")
 ```
-
 ```{r}
 tmp <-  readRDS("~/NB_lncRNA/output/code/lncRNA/DataQC/data2DEG.RDS")
 sampleInfo <- tmp[[2]]
@@ -20,7 +19,6 @@ sampleInfo <- sampleInfo[c(7, 8, 1, 2, 5, 6, 3, 4),]
 ```{r}
 DT::datatable(sampleInfo[, .(sample, Clone,  Group)], class = 'cell-border stripe')
 ```
-
 ```{r}
 #lncRNA
 dds_list <- readRDS("~/NB_lncRNA/output/code/lncRNA/NEG_VS_POS/POS_vs_NEG.RDS")
@@ -252,7 +250,6 @@ go_res <- as.data.frame(go_res) %>% dplyr::select(Procesai = Description)
 go_res
 ```
 
-
 # Koreliacija {.tabset}
 ## Pagal raišką
 Pagrinde matomi du klasteriai, kur didžioji dalis koreliuoja teigiamai.
@@ -345,20 +342,21 @@ su pakitusiais baltymą koduojančiais genais.
 
 Prie susidariusių genų grupių jungiame lncRNA, kurios galėtų būti susijusios su susidariusom grupėm.
 ```{r}
-g <- readRDS( "~/NB_lncRNA/output/code/BioInsights/graph/network_graph_PN.RDS")
+g <- readRDS( "~/NB_lncRNA/output/code/BioInsights/graph/network_graph_PN_padj.RDS")
 V(g)$name <- V(g)$symbol
-tg <- readRDS("~/NB_lncRNA/output/code/BioInsights/graph/tbl_PS.rds")
+tg <- readRDS("~/NB_lncRNA/output/code/BioInsights/graph/tbl_PN_padj.rds")
 ```
 ## lncRNA charakteristikos
-Turima 229 mazgus ir 527 ryšius tarp ilgųjų nekoduojančių RNR ir baltymų arba baltymo-baltymo
-
-Mazgai panašaus, nedidelio dydžio.
+Turima 726 mazgus ir 4619 ryšius tarp ilgųjų nekoduojančių RNR ir baltymų arba baltymo-baltymo
 ```{r}
 table(V(g)$type)
-table(E(g)$edge_type)
-
 vcount(g)
+
+table(E(g)$edge_type)
 ecount(g)
+```
+Vienas didelis tinklas ir kiti maži (pagal komponentų viename tinkle sk.)
+```{r}
 components(g)$csize
 ```
 - Degree -> skaičius ryšių vienai lncRNA (top 10 su didžiausių skaičumi ryšių)
@@ -396,6 +394,7 @@ datatable(lnc_stats_clean, options = list(pageLength = 10, scrollX = TRUE))
 ```
 
 ## Tinklas
+
 Top lncRNA
 ```{r}
 threshold <- quantile(lnc_stats$regulatory_score, 0.75)
@@ -432,7 +431,7 @@ tinklas(subgraph)
 
 ## lncRNA funkcijos priskyrimas pagal tinklą
 ```{r}
-lnc_enrichment_results <- readRDS("~/NB_lncRNA/output/code/BioInsights/graph/lncEn_PN.RDS")
+lnc_enrichment_results <- readRDS("~/NB_lncRNA/output/code/BioInsights/graph/lncEn_PN_padj.RDS")
 ```
 ```{r, fig.height=12, fig.width= 12}
 top5_lnc <- top_lnc$symbol[1:5]
@@ -449,6 +448,9 @@ plot_grid(plotlist = plots, ncol = 2)
 
 ## Lentelė su top lncRNA ir jų mRNA reguliacija 
 ```{r}
+lncGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/POS_NEG/lncGR_PN_padj.RDS")
+geneGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/POS_NEG/geneGR_PN_padj.RDS")
+
 geneGR_df <- as.data.frame(geneGR)
 res_pc <- sig %>%
   mutate(symbol = geneGR_df$gene_name[match(rn, geneGR_df$gene_id)]) %>%

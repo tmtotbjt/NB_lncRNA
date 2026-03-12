@@ -20,7 +20,6 @@ sampleInfo$Group <- sampleInfo$Oxygen
 ```{r}
 DT::datatable(sampleInfo[, .(sample, Clone,  Group)], class = 'cell-border stripe')
 ```
-
 ```{r}
 list_of_4 <- tmp[[1]]
 counts_lnc <- list_of_4[[2]]
@@ -37,7 +36,6 @@ res <- results(dds) %>% as.data.table(., keep.rownames=TRUE)
 
 sig_lncRNAs <- subset(res, padj < 0.05 & abs(log2FoldChange) > 1.25)
 sig_lncRNAs <- sig_lncRNAs[order(sig_lncRNAs$padj), ]
-sig_lncRNAs$gene_id <- rownames(sig_lncRNAs)
 sig_lncRNAs <- as.data.frame(sig_lncRNAs)
 #rownames(sig_lncRNAs) <- sub("\\..*$", "", rownames(sig_lncRNAs))
 mat_filt_lnc <- mat[rownames(mat) %in% sig_lncRNAs$rn, ]
@@ -317,20 +315,21 @@ su pakitusiais baltymą koduojančiais genais.
 
 Prie susidariusių genų grupių jungiame lncRNA, kurios galėtų būti susijusios su susidariusom grupėm.
 ```{r}
-g <- readRDS( "~/NB_lncRNA/output/code/BioInsights/graph/network_graph_TK.RDS")
+g <- readRDS( "~/NB_lncRNA/output/code/BioInsights/graph/network_graph_TK_padj.RDS")
 V(g)$name <- V(g)$symbol
-tg <- readRDS("~/NB_lncRNA/output/code/BioInsights/graph/tbl_TK.rds")
+tg <- readRDS("~/NB_lncRNA/output/code/BioInsights/graph/tbl_TK_padj.rds")
 ```
 ## lncRNA charakteristikos
-Turima 169 mazgus ir 213 ryšius tarp ilgųjų nekoduojančių RNR ir baltymų arba baltymo-baltymo
-
-Mazgai panašaus, nedidelio dydžio.
+Turima 332 mazgus ir 585 ryšius tarp ilgųjų nekoduojančių RNR ir baltymų arba baltymo-baltymo
 ```{r}
 table(V(g)$type)
-table(E(g)$edge_type)
-
 vcount(g)
+
+table(E(g)$edge_type)
 ecount(g)
+```
+Vienas didelis tinklas ir kiti maži (pagal komponentų viename tinkle sk.)
+```{r}
 components(g)$csize
 ```
 
@@ -369,6 +368,7 @@ datatable(lnc_stats_clean, options = list(pageLength = 10, scrollX = TRUE))
 ```
 
 ## Tinklas
+
 Top lncRNAs
 ```{r}
 threshold <- quantile(lnc_stats$regulatory_score, 0.75)
@@ -401,6 +401,9 @@ plot_grid(plotlist = plots, ncol = 2)
 
 ## Lentelė su top lncRNA ir jų mRNA reguliacija
 ```{r}
+lncGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/Oxygen/lncGR_padj.RDS")
+geneGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/Oxygen/geneGR_padj.RDS")
+
 geneGR_df <- as.data.frame(geneGR)
 res_pc <- sig %>%
   mutate(symbol = geneGR_df$gene_name[match(rn, geneGR_df$gene_id)]) %>%

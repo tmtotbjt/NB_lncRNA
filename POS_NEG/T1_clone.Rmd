@@ -61,7 +61,7 @@ res <- top$table
 # Bendras mėginių ir raiškos pasižiūrėjimas {.tabset}
 ```{r}
 res$logFC <- as.numeric(as.character(res$logFC))
-genesFC <- rownames(res)[res$logFC >= log2(3) & res$PValue < 0.05]
+genesFC <- rownames(res)[res$logFC >= log2(3) & res$FDR < 0.05]
 logcpm <- cpm(y, log=TRUE)
 
 #atsifiltravimas
@@ -119,17 +119,36 @@ a | b| c
 ```
 
 ## Pagal raišką
+
+Pagrinde matomi du klasteriai, kur didžioji dalis koreliuoja teigiamai.
+Taip pat pastebimi smulkesni kalsteriai.
+Gali būti stebimi klasteriai, kurie atsirado ne dėl POS NEG skirtumų, bet dėl skirtumų tarp kolnų.
 ```{r}
-# pearson sutinkama straipsniuose, bet yra kad siūlo spearman
 cor_matrix <- cor(t(lnc_mat_top), t(pc_mat_top), method = "spearman")
+p1 <- cor_heatmap(cor_matrix, "Su efektu")
+```
+
+Atmetus poveikio grupę, matomi klasteriai, kurie gali kinta kartu.
+```{r}
+fit <- lmFit(lnc_mat_top, design)
+mat_lnc <- residuals.MArrayLM(fit, lnc_mat_top)
+
+fit <- lmFit(pc_mat_top, design)
+mat_pc <- residuals.MArrayLM(fit, pc_mat_top)
+
+cor_matrix <- cor(t(mat_lnc), t(mat_pc), method = "spearman")
 cor_df <- reshape2::melt(cor_matrix)
 colnames(cor_df) <- c("lncRNA", "mRNA", "value")
-pheatmap(cor_matrix,
-         clustering_distance_rows = "euclidean",
-         clustering_distance_cols = "euclidean",
-         show_rownames = FALSE,
-         show_colnames = FALSE)
+p2 <- cor_heatmap(cor_matrix, "Be efekto")
 ```
+
+```{r, fig.width=12}
+g1 <- grid.grabExpr(draw(p1))
+g2 <- grid.grabExpr(draw(p2))
+
+gridExtra::grid.arrange(g1, g2, ncol = 2)
+```
+
 
 
 ## Stipriai koreliuojančių su lncRNA mRNA funckinė anotacija

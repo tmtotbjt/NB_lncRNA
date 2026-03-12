@@ -35,12 +35,11 @@ rownames(mat) <- vsd$rn
 
 res <- results(dds) %>% as.data.table(., keep.rownames=TRUE) 
 
-sig_lncRNAs <- subset(res, pvalue < 0.05 & abs(log2FoldChange) > 1.25)
+sig_lncRNAs <- subset(res, padj < 0.1)
 sig_lncRNAs <- sig_lncRNAs[order(sig_lncRNAs$padj), ]
-sig_lncRNAs$gene_id <- rownames(sig_lncRNAs)
+sig_lncRNAs$gene_id <- sig_lncRNAs$rn
 sig_lncRNAs <- as.data.frame(sig_lncRNAs)
-#rownames(sig_lncRNAs) <- sub("\\..*$", "", rownames(sig_lncRNAs))
-mat_filt_lnc <- mat[rownames(mat) %in% sig_lncRNAs$rn, ]
+mat_filt_lnc <- mat[rownames(mat) %in% sig_lncRNAs$gene_id, ,drop = FALSE]
 rownames(mat_filt_lnc) <- sub("\\..*$", "", rownames(mat_filt_lnc))
 ```
 ```{r}
@@ -56,7 +55,7 @@ vsd_pc <- vst(dds)
 mat_pc <- assay(vsd_pc)
 res_pc <- results(dds) %>% as.data.table(., keep.rownames=TRUE)
 
-sig <- subset(res_pc, pvalue < 0.05 & abs(log2FoldChange) >= 1.25)
+sig <- subset(res_pc, padj < 0.1 & abs(log2FoldChange) >= 1.25)
 sig <- sig[order(sig$padj), ]
 sig <- as.data.frame(sig)
 mat_filt_pc <- mat_pc[rownames(mat_pc) %in% sig$rn, ]
@@ -111,8 +110,8 @@ a | b| c
 ```{r}
 sig_lnc_up <- subset(sig_lncRNAs, padj < 0.05 & log2FoldChange > 1)
 sig_lnc_down <- subset(sig_lncRNAs, padj < 0.05 & log2FoldChange < -1)
-sig_pc_up <- subset(sig, padj < 0.05 & log2FoldChange >= log2(2))
-sig_pc_down <- subset(sig, padj < 0.05 & log2FoldChange <= (-1)*log2(2))
+sig_pc_up <- subset(sig, padj < 0.05 & log2FoldChange > 0)
+sig_pc_down <- subset(sig, padj < 0.05 & log2FoldChange < 0)
 ```
 ```{r}
 pc_names <- rownames(mat_pc)
@@ -177,273 +176,4 @@ Sumažėjusios raiškos genai susiję su: raumenų veikla, motorika
 d | b
 ```
 
-
-# Genominis kontekstas (šalia lncRNA esantys genai) {.tabset}
-lncRNA lgali reguliuoti šalia esančių genų raišą. Stebima kokie yra šalia esantys pakitę baltymą koduoajntys genai.
-## Šalia lncRNA esantys baltymą koduojantys genai
-```{r}
-lncGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/Curoxin_vs_Control/lncGR_Cu_Co.RDS")
-#geneGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/geneGR.RDS")
-```
-
-lncRNA genai, jų genominė padėtis ir artimiausi baltymą koduojantys kaimyniniai genai su atstumu iki jų.
-Genominė padėtis:
-
-- Antisense - persidengia su baltymą koduojančiu genu, bet priešingoje grandinėje.
-
-- Sense Overlapping - persidengia su baltymą koduojančiu genu toje pačioje grandinėje.
-
-- Bidirectional - priešingos krypties nei artimiausias baltymą koduojantis genas (šalia jo reguliacinių elementų).
-
-- Intergenic - lncRNA tarp baltymą koduojančių genų.
-
-
-Kadangi pagal poveikį atsirinktas pakankmai mažas genų skaičius, didžioji dalis lncRNA 
-(beiveik visos) yra intergeninės.
-```{r}
-#final_table <- get_near_table(lncGR, geneGR)
-final_table <- read.csv("~/NB_lncRNA/output/code/BioInsights/Curoxin_vs_Control/distance.csv")
-table(final_table$genomic_context)
-```
-
-
-## Šalia lncRRNA esantys pakitę baltymą koduojantys genai
-Atfiltravus pakitusios raiškos baltymą koduojančius genus.
-
-Liko vienas genas, su kuriuo ilgoji nekoduojančioji RNR ENSG00000302800 persidengia (galimai reguliuojamas)
-```{r}
-geneGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/Curoxin_vs_Control/geneGR_Cu_Co.RDS")
-final_table <- final_table[final_table$nearest_protein_coding_gene %in% geneGR$gene_name, ]
-
-datatable(final_table, class = 'cell-border stripe', , rownames = FALSE)
-table(final_table$genomic_context)
-```
-
-## Šalia (50kb) lncRNA esančių baltymą koduojančių GO enrichment
-Rastas geno funcijos siejamos su imunine sistema ir atsaku.
-```{r}
-# Artimiausi genai (cis, within 100kb)
-# cituojant D Avalos (2023) — For distances between 50 kb and 1Mb between co-expressed gene pairs
-nearest_genes <- distanceToNearest(lncGR, geneGR)
-cis_genes <- geneGR[subjectHits(nearest_genes)][mcols(nearest_genes)$distance <= 50000]
-cis_gene_names <- unique(cis_genes$gene_id)
-cis_gene_names <- sub("\\..*$", "", cis_gene_names)
-
-go_res <- enrichGO(gene = cis_gene_names,
-                   universe = pc_names,
-                   OrgDb = org.Hs.eg.db,
-                   keyType = "ENSEMBL",
-                   ont = "BP",
-                   pvalueCutoff = 0.05)
-go_res <- as.data.frame(go_res) %>% dplyr::select(Procesai = Description)
-datatable(go_res, class = 'cell-border stripe')
-```
-
-# Koreliacija pagal raišką {.tabset}
-Matoma, jog yra tarpusavyje koreliuojančių lncRNA su mRNA (matomas grupių susidarymas).
-```{r}
-cor_matrix <- cor(t(mat_filt_lnc), t(mat_filt_pc), method = "spearman")
-p1 <- cor_heatmap(cor_matrix, "Su efektu")
-```
-
-Atmetus poveikio grupę, matomi klasteriai, kurie gali kinta kartu.
-```{r}
-Status <- factor(sampleInfo$Group, levels = c("Curaxin", "control"))
-design <- model.matrix(~Status)
-fit <- lmFit(mat_filt_lnc, design)
-mat_lnc <- residuals.MArrayLM(fit, mat_filt_lnc)
-
-fit <- lmFit(mat_filt_pc, design)
-mat_pc <- residuals.MArrayLM(fit, mat_filt_pc)
-
-cor_matrix <- cor(t(mat_lnc), t(mat_pc), method = "spearman")
-cor_df <- reshape2::melt(cor_matrix)
-colnames(cor_df) <- c("lncRNA", "mRNA", "value")
-p2 <- cor_heatmap(cor_matrix, "Be efekto")
-```
-
-```{r, fig.width=12}
-g1 <- grid.grabExpr(draw(p1))
-g2 <- grid.grabExpr(draw(p2))
-
-gridExtra::grid.arrange(g1, g2, ncol = 2)
-```
-
-## Stipriai koreliuojančių su lncRNA mRNA funckinė anotacija
-Funcionalumas susijęs su: membrana (transporas, reakciją į stimulą, judėjimu).
-```{r, fig.width = 8, fig.height= 5}
-cor_df_sig <- subset(cor_df, abs(value) > 0.75)
-
-genes <- unique(as.character(cor_df_sig$mRNA))
-genes <- sub("\\..*$","", genes)
-
-ego <- enrichGO(genes, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP")
-dotplot(ego, showCategory=10) + ggtitle("Koreliuojantys bendrai")
-```
-
-
-## Atskirai tarp klonų sudarius koreliacijas
-Paėmus dviejų klonų korliacijas ir atfiltravus vienodas (taip paėmus tik genus, kurie skiriasi pagal poveikoi grupę
-atmetus skirtumą pagal POS NEG).
-```{r}
-cor_df1 <- readRDS("~/NB_lncRNA/output/code/BioInsights/Curoxin_vs_Control/cor_df_7.RDS")
-cor_df2 <- readRDS("~/NB_lncRNA/output/code/BioInsights/Curoxin_vs_Control/cor_df_12.RDS")
-cor_sig1 <- subset(cor_df1, abs(value) > 0.8)
-cor_sig2 <- subset(cor_df2, abs(value) > 0.8)
-
-poros_1 <- cor_sig1[, c("lncRNA", "mRNA")]
-poros_2 <- cor_sig2[, c("lncRNA", "mRNA")]
-
-common_pairs <- inner_join(poros_1, poros_2, by = c("lncRNA", "mRNA"))
-unique_pc <- unique(common_pairs$mRNA)
-unique_pc <- sub("\\..*$", "", unique_pc)
-
-```
-
-Vienodai koreliuojančių genų grupės abejuose klonų tipuose neturi funkcinio aprašo.
-```{r}
-gene_df <- bitr(unique_pc,
-                fromType="ENSEMBL",
-                toType=c("SYMBOL","ENTREZID"),
-                OrgDb=org.Hs.eg.db)
-
-gene_df
-
-AnnotationDbi::select(org.Hs.eg.db, keys = gene_df$ENTREZID, columns = c("GO","ONTOLOGY"), keytype = "ENTREZID")
-```
-
-# Protein-protein interaction network construction, module analysis {.tabset}
-Naudojant STRING duomenų bazę sukuriamas baltymo-baltymo sąveikos tinklas 
-su pakitusiais baltymą koduojančiais genais.
-
-Prie susidariusių genų grupių jungiame lncRNA, kurios galėtų būti susijusios su susidariusom grupėm.
-```{r}
-g <- readRDS( "~/NB_lncRNA/output/code/BioInsights/graph/network_graph_CC.RDS")
-V(g)$name <- V(g)$symbol
-tg <- readRDS("~/NB_lncRNA/output/code/BioInsights/graph/tbl_CC.rds")
-```
-## lncRNA charakteristikos
-Turima 169 mazgus ir 213 ryšius tarp ilgųjų nekoduojančių RNR ir baltymų arba baltymo-baltymo
-
-Mazgai panašaus, nedidelio dydžio.
-```{r}
-table(V(g)$type)
-table(E(g)$edge_type)
-
-vcount(g)
-ecount(g)
-components(g)$csize
-```
-- Degree -> skaičius ryšių vienai lncRNA (top 10 su didžiausių skaičumi ryšių)
-
-- Betweenness -> trumpiausias atstumas tinkle (tiltas kitų elementų sujungimui tinkle)
-
-- Eigenvector- lncRNA kurių jungtis prie mRNR yra stipriausia (jungiasi su mRNA)
-
-- Module- kuriai grupei priklauso (kurioje genų grupėje veikia)
-
-Atrenkamos lncRNA, kurios gali būti reguliatoriais
-```{r}
-library(tidygraph)
-library(dplyr)
-tg_tb <- tg %>%
-  activate(nodes) %>%
-  mutate(degree = centrality_degree(),
-         betweenness = centrality_betweenness(),
-         eigenvector = centrality_eigen() )
-node_stats <- tg_tb %>%
-  activate(nodes) %>%
-  as_tibble()
-
-lnc_stats <- node_stats %>%
-  filter(type == "lncRNA") %>%
-  mutate(
-    deg_rank = percent_rank(degree),
-    bet_rank = percent_rank(betweenness),
-    eig_rank = percent_rank(eigenvector) ) %>%
-  mutate(regulatory_score = deg_rank + bet_rank + eig_rank) %>%
-  arrange(desc(regulatory_score))
-
-lnc_stats_clean <- lnc_stats[,c(3:11)]
-datatable(lnc_stats_clean, options = list(pageLength = 10, scrollX = TRUE))
-```
-## Tinklas
-Top lncRNAs
-```{r}
-threshold <- quantile(lnc_stats$regulatory_score, 0.75)
-top_lnc <- lnc_stats %>%
-  filter(regulatory_score >= threshold)
-
-top_lnc$name
-```
-```{r, fig.height=10, fig.width=10}
-TOP_tinklas(tg, top_lnc$name)
-```
-
-## lncRNA funkcijos priskyrimas pagal tinklą
-```{r}
-lnc_enrichment_results <- readRDS("~/NB_lncRNA/output/code/BioInsights/graph/lncEn_CC.RDS")
-```
-```{r, fig.height=12, fig.width= 12}
-top5_lnc <- top_lnc$symbol[1:5]
-
-library(cowplot)
-plots <- lapply(top5_lnc, function(lnc){
-  ego <- lnc_enrichment_results[[lnc]]
-  if(is.null(ego) || nrow(as.data.frame(ego)) == 0) return(NULL)
-  dotplot(ego, showCategory = 10, title = lnc) })
-
-plots <- plots[!sapply(plots, is.null)]
-plot_grid(plotlist = plots, ncol = 2) 
-```
-
-## Lentelė su top lncRNA ir jų mRNA reguliacija
-```{r}
-geneGR_df <- as.data.frame(geneGR)
-res_pc <- sig %>%
-  mutate(symbol = geneGR_df$gene_name[match(rn, geneGR_df$gene_id)]) %>%
-  mutate(mRNA_regulation = case_when(
-    log2FoldChange > 0 ~ "up",
-    log2FoldChange < 0 ~ "down",
-    TRUE ~ "no_change")) %>%
-  select(rn, symbol, log2FoldChange, mRNA_regulation)
-
-lncGR_df <- as.data.frame(lncGR)
-res_lnc <- sig_lncRNAs %>%
-  mutate(symbol = lncGR_df$gene_name[match(rn, lncGR_df$gene_id)]) %>%
-  mutate(lncRNA_regulation = case_when(
-    log2FoldChange > 0 ~ "up",
-    log2FoldChange < 0 ~ "down",
-    TRUE ~ "no_change")) %>%
-  select(rn, symbol, log2FoldChange, lncRNA_regulation)
-
-lnc_reg <- res_lnc %>%
-  select(symbol, log2FoldChange) %>%
-  mutate(lnc_direction = ifelse(log2FoldChange > 0, "up", "down"))
-
-lnc_nodes <- V(g)[type == "lncRNA"]
-lnc_mrna_table <- do.call(rbind, lapply(lnc_nodes$symbol, function(lnc) {
-  
-  neigh <- neighbors(g, lnc)
-  target_mrna <- V(g)$symbol[neigh][V(g)$type[neigh] == "protein"]
-  
-  if(length(target_mrna) == 0) return(NULL)
-  
-  data.frame(
-    lncRNA = lnc,
-    target_mRNA = target_mrna,
-    stringsAsFactors = FALSE ) }))
-
-mRNA_reg <- res_pc %>%
-  select(symbol, log2FoldChange) %>%
-  mutate(mRNA_direction = ifelse(log2FoldChange > 0, "up", "down"))
-
-lnc_mrna_table <- lnc_mrna_table %>%
-  left_join(lnc_reg %>% select(symbol, lnc_direction), by = c("lncRNA" = "symbol")) %>%
-  left_join(mRNA_reg %>% select(symbol, mRNA_direction), by = c("target_mRNA" = "symbol"))
-
-lnc_mrna <- lnc_mrna_table %>%
-  filter(lncRNA %in% top5_lnc)
-
-datatable(lnc_mrna, options = list(pageLength = 10, scrollX = TRUE))
-```
+Mėginiai labai skirtingi. Pakitusių genų patikimumas pakankami mažas (netenkina 0,05)

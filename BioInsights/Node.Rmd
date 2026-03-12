@@ -8,11 +8,26 @@ Pakaita populiariam WGCNA (jam reikia bent 15 mėginių)
 library(pacman)
 p_load(dplyr, igraph, ggraph, tidygraph, STRINGdb, clusterProfiler, org.Hs.eg.db)
 ```
+```{r}
+sig_lncRNAs <- subset(res, padj < 0.05)
+sig_lncRNAs <- sig_lncRNAs[order(sig_lncRNAs$padj), ]
+sig_lncRNAs <- as.data.frame(sig_lncRNAs)
 
+mat_filt_lnc <- mat[rownames(mat) %in% sig_lncRNAs$rn, ]
+rownames(mat_filt_lnc) <- sub("\\..*$", "", rownames(mat_filt_lnc))
+
+
+sig <- subset(res_pc, padj < 0.05)
+sig <- sig[order(sig$padj), ]
+sig <- as.data.frame(sig)
+mat_filt_pc <- mat_pc[rownames(mat_pc) %in% sig$rn, ]
+rownames(mat_filt_pc) <- sub("\\..*$", "", rownames(mat_filt_pc))
+```
+
+Pasirenkami reikiami duomenys (matrica su atfiltruotais duomenimis)
 Pašalinimas treatment effect sužinoti galimas reguliacijas pakitusių genų per koreliacijas
 ```{r}
-mat <- rbind(mat_filt_lnc, mat_filt_pc)
-Status <- factor(sampleInfo$Group, levels = c("Batimastat", "control"))
+Status <- factor(sampleInfo$Group, levels = c("control", "Batimastat"))
 design <- model.matrix(~Status)
 fit <- lmFit(mat_filt_lnc, design)
 mat_lnc <- residuals.MArrayLM(fit, mat_filt_lnc)
@@ -21,7 +36,7 @@ fit <- lmFit(mat_filt_pc, design)
 mat_pc <- residuals.MArrayLM(fit, mat_filt_pc)
 ```
 
-Ištraukiamos reikšmingos koreliacijos
+Ištraukiamos reikšmingos koreliacijos: 1% geriausių
 ```{r}
 cor_mat <- cor(t(mat_lnc), t(mat_pc), method="pearson")
 n_top <- ceiling(length(cor_mat) * 0.01)
@@ -51,10 +66,10 @@ lncGR <- GRanges(
     strand   = strand(gtf_lnc),
     gene_name = mcols(gtf_lnc)$gene_name,
     gene_id   = mcols(gtf_lnc)$gene_id)
-lncGR <- lncGR[lncGR$gene_id %in% sig_lncRNAs$rn, ] #keiciam rn i rownames ir atv
+lncGR <- lncGR[lncGR$gene_id %in% rownames(sig_lncRNAs), ] #keiciam rn i rownames ir atv
 
 ### pasikeisk pav
-#saveRDS(lncGR, "~/NB_lncRNA/output/code/BioInsights/Bastimat/lncGR_HBC.RDS")
+#saveRDS(lncGR, "~/NB_lncRNA/output/code/BioInsights//.RDS")
 ### pasikeisk pav
 
 
@@ -68,7 +83,7 @@ geneGR <- GRanges(
 geneGR <- geneGR[geneGR$gene_id %in% sig$rn, ]
 
 ### pasikeisk pav
-#saveRDS(geneGR, "~/NB_lncRNA/output/code/BioInsights/Bastimat/geneGR_HBC.RDS")
+#saveRDS(geneGR, "~/NB_lncRNA/output/code/BioInsights//.RDS")
 ### pasikeisk pav
 ```
 
@@ -116,7 +131,7 @@ Sukuriamas grafikas su mazgais (lncRNA/baltymai) ir kraštais (koreliacijos/PPI)
 # Duomenų bazės įkėlimas
 string_db <- STRINGdb$new(version="12.0", 
                           species=9606,
-                          score_threshold=400,
+                          score_threshold=900,
                           input_directory="")
 
 # Mappinimas pagal db
@@ -129,7 +144,7 @@ ppi <- string_db$get_interactions(protein_ids)
 ppi_edges <- ppi %>% transmute(
   from   = from,
   to     = to,
-  weight = as.numeric(combined_score) / 1000  # normalize to 0-1
+  weight = as.numeric(combined_score) / 1000  # normalizavimas intervalu 0-1
 )
 ```
 
@@ -180,27 +195,6 @@ ecount(g)  # number of edges
 avg_deg <- 2 * ecount(g) / vcount(g)
 components(g)$csize
 ```
-
-Kiek turi mazgų (min, max)
-```{r}
-deg <- degree(g)
-summary(deg)
-```
-
-top 10 lncRNA su didžiausiu ryšių skaičiumi
-```{r}
-lnc_hubs <- sort(deg[V(g)$type=="lncRNA"], decreasing=TRUE)
-lnc_hubs
-```
-
-top 10 baltymą koduojančių genų su didžiausiu ryšių skaičiumi
-```{r}
-names(deg) <- V(g)$symbol
-prot_hubs <- sort(deg[V(g)$type=="protein"], decreasing=TRUE)
-prot_hubs
-```
-
-Didžioji dalis tinklo yra sutelkta keliuose dideliuose moduliuose, o likusi dalis – mažuose klasteriuose.
 ```{r}
 bet <- betweenness(g)
 top_bet <- sort(bet, decreasing = TRUE)
@@ -234,7 +228,6 @@ module_hubs <- do.call(rbind, module_hubs)
 module_hubs
 
 
-
 tg <- as_tbl_graph(g) 
 ggraph(tg, layout = "fr") +
   geom_edge_link(aes(color = edge_type), alpha = 0.3) +
@@ -245,25 +238,8 @@ ggraph(tg, layout = "fr") +
   scale_shape_manual(values = c("lncRNA" = 17, "protein" = 16)) +
   theme_void() +
   ggtitle("Clean LncRNA-PPI Network with Modules and Hubs")
-#saveRDS(g, file = "~/NB_lncRNA/output/code/BioInsights/graph/network_graph_HBC.RDS")
-#saveRDS(tg, file = "~/NB_lncRNA/output/code/BioInsights/graph/tbl_HBC.rds")
-```
-
-
-```{r}
-g <- readRDS( "~/NB_lncRNA/output/code/BioInsights/graph/network_graph_NBC.RDS")
-tg <- readRDS("~/NB_lncRNA/output/code/BioInsights/graph/tbl_NBC.rds")
-```
-```{r}
-ggraph(tg, layout = "fr") +
-  geom_edge_link(aes(color = edge_type), alpha = 0.3) +
-  geom_node_point(aes(color = type, size = degree, shape = type)) +
-  geom_node_text(aes(label = symbol), repel = TRUE, size = 3) +
-  scale_color_manual(values = c("lncRNA" = "orange", "protein" = "skyblue")) +
-  scale_edge_color_manual(values = c("lncRNA_corr" = "red", "PPI" = "#261ace")) +
-  scale_shape_manual(values = c("lncRNA" = 17, "protein" = 16)) +
-  theme_void() +
-  ggtitle("LncRNA-PPI Network with Modules and Hubs")
+#saveRDS(g, file = "~/NB_lncRNA/output/code/BioInsights/graph/network_graph_.RDS")
+#saveRDS(tg, file = "~/NB_lncRNA/output/code/BioInsights/graph/tbl_.rds")
 ```
 
 ```{r}
@@ -288,7 +264,7 @@ lnc_stats <- node_stats %>%
   arrange(desc(regulatory_score))
 
 lnc_stats_clean <- lnc_stats[,c(3:11)]
-datatable(lnc_stats_clean, options = list(pageLength = 10, scrollX = TRUE))
+lnc_stats_clean
 ```
 ```{r}
 threshold <- quantile(lnc_stats$regulatory_score, 0.75)
@@ -298,6 +274,14 @@ top_lnc <- lnc_stats %>%
 
 top_lnc$name
 ```
+
+Persidengiančios yra su tam tikrais baltymais.
+
+Bandyti atsifiltruoti pagal persidengimą, vieną grupę sukurti pagal funkciją
+(keli pc į vieną pagal funkcijos  panašumą, tokiu atveju linijos storis iš tokio taško yra pagal tai, kiek baltymų išeina)
+
+Anyways, mažinti tinklą pagal KĄ NORS (kažką filtruojant. 
+Pabandyk rasti būdų kaip susimažinti accuratly (straipnsi https://www.nature.com/articles/s41598-025-20187-3#Sec2 gal))
 
 ```{r}
 lnc_enrichment_results <- list()
@@ -324,5 +308,10 @@ for (lnc in top_lnc$symbol) {
 }
 
 lnc_enrichment_results
-# saveRDS(lnc_enrichment_results, "~/NB_lncRNA/output/code/BioInsights/graph/lncEn_HBC.RDS")
+# saveRDS(lnc_enrichment_results, "~/NB_lncRNA/output/code/BioInsights/graph/lncEn_.RDS")
+```
+
+
+```{r}
+
 ```

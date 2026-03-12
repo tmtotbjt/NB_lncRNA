@@ -1,314 +1,168 @@
-
-
-# GRanges
+Reguliacinis PPI su funkcijom
 ```{r}
-# Jeigu reiktų keisti (mažinti)
-sig_lncRNAs <- subset(res, padj < 0.01 & abs(log2FoldChange) > 2.5)
-sig_lncRNAs <- sig_lncRNAs[order(sig_lncRNAs$padj), ]
-sig_lncRNAs$gene_id <- rownames(sig_lncRNAs)
-sig_lncRNAs <- as.data.frame(sig_lncRNAs)
-
-mat_filt_lnc <- mat[rownames(mat) %in% rownames(sig_lncRNAs), ]
-rownames(mat_filt_lnc) <- sub("\\..*$", "", rownames(mat_filt_lnc))
-
-
-sig <- subset(res_pc, padj < 0.01 & abs(log2FoldChange) >= 5)
-sig <- sig[order(sig$padj), ]
-sig <- as.data.frame(sig)
-mat_filt_pc <- mat_pc[rownames(mat_pc) %in% sig$rn, ]
-rownames(mat_filt_pc) <- sub("\\..*$", "", rownames(mat_filt_pc))
+library(pacman)
+p_load(dplyr, igraph, ggraph, tidygraph, STRINGdb, clusterProfiler, org.Hs.eg.db)
 ```
-
 ```{r}
 gtf <- import("~/NB_lncRNA/input/gencode.v49.annotation.gtf")
 gtf_lnc <- gtf[gtf$gene_type == "lncRNA"]
 gtf_pc <- gtf[gtf$gene_type == "protein_coding"]
 ```
+```{r}
+gene_map <- data.frame(
+  gene_id   = mcols(gtf_pc)$gene_id,
+  gene_name = mcols(gtf_pc)$gene_name)
 
+lnc_map <- data.frame(
+  gene_id   = mcols(gtf_lnc)$gene_id,
+  gene_name = mcols(gtf_lnc)$gene_name)
+
+map_all <- rbind(gene_map, lnc_map)
+map_all <- map_all[!duplicated(map_all$gene_id), ]
+res$gene_symbol <- map_all$gene_name[match(rownames(res), map_all$gene_id)]
+
+convert_names <- function(mat, map){
+  new_names <- map$gene_name[match(rownames(mat), map$gene_id)]
+  new_names[is.na(new_names)] <- rownames(mat)[is.na(new_names)]
+  rownames(mat) <- new_names
+  return(mat)
+}
+
+lnc_mat_top <- convert_names(lnc_mat_top, map_all)
+pc_mat_top  <- convert_names(pc_mat_top, map_all)
+```
+
+Pasirenkami reikiami duomenys (matrica su atfiltruotais duomenimis)
+
+Iš turimų duomenų atsirenkame statistiškai reikšmingai pakitusias lncRNA ir mRNA 
+(be log2FoldChange parametro, nes tiriamos sąveikos, kurios gali turėti reikšmės)
+Ištraukiamos reikšmingos koreliacijos: 1% geriausių
+```{r}
+cor_matrix <- cor(t(lnc_mat_top), t(pc_mat_top), method="pearson")
+
+p_matrix <- matrix(NA, nrow=nrow(lnc_mat_top), ncol=nrow(pc_mat_top))
+
+for(i in 1:nrow(lnc_mat_top)){
+  for(j in 1:nrow(pc_mat_top)){
+    p_matrix[i,j] <- cor.test(lnc_mat_top[i,], pc_mat_top[j,], method="pearson")$p.value
+  }
+}
+
+rownames(cor_matrix) <- rownames(lnc_mat_top)
+colnames(cor_matrix) <- rownames(pc_mat_top)
+```
 
 ```{r}
-lncGR <- GRanges(
-    seqnames = seqnames(gtf_lnc),
-    ranges   = ranges(gtf_lnc),
-    strand   = strand(gtf_lnc),
-    gene_name = mcols(gtf_lnc)$gene_name,
-    gene_id   = mcols(gtf_lnc)$gene_id)
-lncGR <- lncGR[lncGR$gene_id %in% rownames(sig_lncRNAs), ] #keiciam rn i rownames ir atv
+cor_cutoff <- 0.95
+p_cutoff <- 0.05
 
-### pasikeisk pav
-#saveRDS(lncGR, "~/NB_lncRNA/output/code/BioInsights//lncGR.RDS")
-### pasikeisk pav
+sig_pairs <- which(abs(cor_matrix) > cor_cutoff & p_matrix < p_cutoff, arr.ind=TRUE)
 
+lnc_mrna_edges <- data.frame(
+  lncRNA = rownames(cor_matrix)[sig_pairs[,1]],
+  mRNA   = colnames(cor_matrix)[sig_pairs[,2]],
+  cor    = cor_matrix[sig_pairs])
+```
 
+```{r}
+lnc_nodes <- data.frame(
+  gene = rownames(lnc_mat_top),
+  type = "lncRNA")
 
-geneGR <- GRanges(
-    seqnames = seqnames(gtf_pc),
-    ranges   = ranges(gtf_pc),
-    strand   = strand(gtf_pc),
-    gene_name = mcols(gtf_pc)$gene_name,
-    gene_id   = mcols(gtf_pc)$gene_id)
-geneGR <- geneGR[geneGR$gene_id %in% sig$rn, ]
+mrna_nodes <- data.frame(
+  gene = rownames(pc_mat_top),
+  type = "mRNA")
 
-### pasikeisk pav
-#saveRDS(geneGR, "~/NB_lncRNA/output/code/BioInsights//geneGR.RDS")
-### pasikeisk pav
+nodes <- rbind(lnc_nodes, mrna_nodes)
 ```
 
 
-# PPI Network and identification of hub lncRNAs
 ```{r}
-geneGR_df <- as.data.frame(geneGR)
-geneGR_df <- geneGR_df %>%
-  distinct(gene_id, .keep_all = TRUE)
-sig_with_symbol <- sig %>%
-  left_join(geneGR_df %>% 
-  dplyr::select(gene_id, gene_name), by = c("rn" = "gene_id"))
-sig_with_symbol$rn <- sub("\\..*$", "", sig_with_symbol$rn)
-```
-```{r, eval = F, echo = F}
+ppi_genes <- rownames(pc_mat_top)
+
 library(STRINGdb)
-string_db <- STRINGdb$new(version = "12.0",
-                          species = 9606,
-                          score_threshold = 400,
-                          network_type = "full")
-mapped <- string_db$map(data.frame(gene_name = sig_with_symbol$gene_name), "gene_name", removeUnmappedRows = TRUE)
-#mapped <- mapped[order(abs(mapped$log2FoldChange), decreasing = TRUE), ]
-mapped_valid <- mapped[!is.na(mapped$STRING_id), ]
 
-ppi_edges <- string_db$get_interactions(mapped_valid$STRING_id)
-ppi_edges <- ppi_edges[ppi_edges$combined_score >= 700, ]
-id2gene <- mapped_valid$gene_name
-names(id2gene) <- mapped_valid$STRING_id
+string_db <- STRINGdb$new(
+  version="11.5",
+  species=9606,   # change if not human
+  score_threshold=400)
 
-ppi_edges$gene1 <- id2gene[ppi_edges$from]
-ppi_edges$gene2 <- id2gene[ppi_edges$to]
+gene_df <- data.frame(gene=ppi_genes)
+mapped <- string_db$map(gene_df, "gene", removeUnmappedRows=TRUE)
+ppi <- string_db$get_interactions(mapped$STRING_id)
 
-ppi_edges <- ppi_edges[!is.na(ppi_edges$gene1) & !is.na(ppi_edges$gene2), ]
-library(igraph)
-
-g <- graph_from_data_frame(
-  ppi_edges[, c("gene1", "gene2")],
-  directed = FALSE)
-
-g <- igraph::simplify(g, remove.multiple = TRUE, remove.loops = TRUE)
-cl <- cluster_louvain(g)
-modules <- split(V(g)$name, membership(cl))
-modules <- modules[sapply(modules, length) >= 3]
-ppi <- data.frame(
-  Module = rep(names(modules), sapply(modules, length)),
-  Gene   = unlist(modules))
-
-### pasikeisk pav
-#write.csv(ppi, "~/NB_lncRNA/output/code/BioInsights//PPI_modules.csv", row.names = FALSE)
-### pasikeisk pav
 ```
-
-```{r, eval = F, echo = F}
-modules <- split(ppi$Gene, ppi$Module)
-
-ens2sym <- sig_with_symbol$gene_name
-names(ens2sym) <- sig_with_symbol$rn
-new_names <- ens2sym[rownames(mat_filt_pc)]
-keep <- !is.na(new_names)
-
-pc_top_sym <- mat_filt_pc[keep, ]
-rownames(pc_top_sym) <- new_names[keep]
-#rownames(pc_top_sym) <- make.unique(new_names[keep])
-
-
-module_expr <- lapply(modules, function(genes) {
-  genes <- intersect(genes, rownames(pc_top_sym))
-  colMeans(pc_top_sym[genes, , drop = FALSE])  })
-
-module_expr <- do.call(rbind, module_expr)
-
-results <- data.frame()
-
-for (lnc in rownames(mat_filt_lnc)) {
-  for (mod in rownames(module_expr)) {
-
-    cor_test <- cor.test(
-      as.numeric(mat_filt_lnc[lnc, ]),
-      as.numeric(module_expr[mod, ]),
-      method = "spearman"
-    )
-
-    results <- rbind(results, data.frame(
-      lncRNA = lnc,
-      Module = mod,
-      rho = cor_test$estimate,
-      pval = cor_test$p.value
-    ))
-  }
-}
-
-perm_test <- function(x, y, nperm = 500) {
-
-  keep <- is.finite(x) & is.finite(y)
-  x <- x[keep]
-  y <- y[keep]
-
-  if (length(x) < 5) return(NA_real_)
-
-  # FORCE numeric scalar
-  obs <- as.numeric(
-    suppressWarnings(cor(x, y, method = "spearman"))
-  )
-
-  perm_rho <- numeric(nperm)
-
-  for (i in seq_len(nperm)) {
-    perm_rho[i] <- as.numeric(
-      suppressWarnings(cor(sample(x), y, method = "spearman"))
-    )
-  }
-
-  mean(abs(perm_rho) >= abs(obs))
-}
-
-results_prefilt <- subset(results, abs(rho) >= 0.6)
-
-
-results_prefilt$perm_pval <- mapply(
-  function(l, m) {
-    perm_test(
-      as.numeric(mat_filt_lnc[l, ]),
-      as.numeric(module_expr[m, ])
-    )
-  },
-  results_prefilt$lncRNA,
-  results_prefilt$Module
-)
-
-final_hits <- subset(results_prefilt, abs(rho) >= 0.7 & perm_pval < 0.01) #0,01
-
-final_hits <- final_hits[order(-abs(final_hits$rho)), ]
-
-### pasikeisk pav
-#saveRDS(final_hits, "~/NB_lncRNA/output/code/BioInsights//hits.RDS")
-### pasikeisk pav
-```
-
-
-```{r, eval = F, echo = F}
-module_entrez <- lapply(modules, function(genes) {
-  bitr(
-    genes,
-    fromType = "SYMBOL",
-    toType   = "ENTREZID",
-    OrgDb    = org.Hs.eg.db
-  )$ENTREZID  })
-module_entrez <- module_entrez[sapply(module_entrez, length) > 5]
-
-ego_list <- lapply(names(module_entrez), function(m) {
-  enrichGO(gene          = module_entrez[[m]],
-          OrgDb         = org.Hs.eg.db,
-          ont           = "BP",
-          pAdjustMethod = "BH",
-          qvalueCutoff  = 0.05,
-          readable      = TRUE)   })
-
-names(ego_list) <- names(module_entrez)
-
-### pasikeisk pav
-#saveRDS(ego_list, "~/NB_lncRNA/output/code/BioInsights//GO_en_mod.RDS")
-### pasikeisk pav
-```
-
-Vykdomas modulių anotavimas.
-```{r, fig.width=10}
-#ego_list <- readRDS("~/NB_lncRNA/output/code/BioInsights/Oxygen/GO_en_mod.RDS")
-
-module_annotation <- do.call(
-  rbind,
-  lapply(names(ego_list), function(m) {
-    eg <- ego_list[[m]]
-    if (is.null(eg) || nrow(eg@result) == 0) return(NULL)
-
-  head(data.frame( Module = m, eg@result[, c("Description", "p.adjust")]), 3)}))
-
-module_labels <- aggregate(Description ~ Module, module_annotation, function(x) x[1])
-
-ggplot(module_annotation, aes(x = Module, y = Description, size = -log10(p.adjust), color = -log10(p.adjust))) +
-  geom_point() +
-  scale_color_viridis_c() +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.text.y = element_text(size= 6),
-        axis.title = element_blank()) +
-  labs(title = "GO Biological Process enrichment of PPI modules")
-```
-
-
-# Tinklas
-
 ```{r}
-mat_filt_pc_sym <- mat_filt_pc[keep, ]
-rownames(mat_filt_pc_sym) <- new_names[keep]
+id_map <- mapped[,c("STRING_id","gene")]
 
+ppi_edges <- merge(ppi, id_map, by.x="from", by.y="STRING_id")
+ppi_edges <- merge(ppi_edges, id_map, by.x="to", by.y="STRING_id")
 
-modules <- split(ppi$Gene, ppi$Module)
+ppi_edges <- data.frame(
+  geneA = ppi_edges$gene.x,
+  geneB = ppi_edges$gene.y,
+  score = ppi_edges$combined_score)
 
-library(igraph)
-module_expr <- lapply(modules, function(genes) {
-  genes <- intersect(genes, rownames(mat_filt_pc_sym))
-  if (length(genes) < 2) return(NULL)
-  colMeans(mat_filt_pc_sym[genes, , drop = FALSE]) })
-
-module_expr <- module_expr[!sapply(module_expr, is.null)]
-module_expr <- do.call(rbind, module_expr)
-
-rownames(module_expr) <- paste0("Module_", rownames(module_expr))
-final_hits$Module <- paste0("Module_", final_hits$Module)
-
-edges <- final_hits[abs(final_hits$rho) >= 0.9 & final_hits$perm_pval <= 0.01,]
-lncGR$gene_id <- sub("\\..*$", "", lncGR$gene_id)
-
-lnc_map <- setNames(lncGR$gene_name, lncGR$gene_id)
-edges$lncRNA_symbol <- lnc_map[edges$lncRNA]
 ```
 
 
 ```{r}
-edge_df <- data.frame(
-  from   = edges$lncRNA_symbol,
-  to     = edges$Module,
-  weight = abs(edges$rho),
-  sign   = ifelse(edges$rho > 0, "positive", "negative"))
+lnc_mrna_edges <- as.data.frame(lnc_mrna_edges)
 
-g_lnc_mod <- graph_from_data_frame(
-  edge_df,
-  directed = FALSE)
+edges <- data.frame(
+  from = lnc_mrna_edges[, "lncRNA"],
+  to   = lnc_mrna_edges[, "mRNA"],
+  weight = as.numeric(lnc_mrna_edges[, "cor"]),
+  stringsAsFactors = FALSE)
 
-V(g_lnc_mod)$type <- ifelse(
-  grepl("^Module_", V(g_lnc_mod)$name),
-  "Module",
-  "lncRNA")
-V(g_lnc_mod)$degree <- degree(g_lnc_mod)
 
-V(g_lnc_mod)$size <- ifelse(
-  V(g_lnc_mod)$type == "lncRNA",
-  6 + V(g_lnc_mod)$degree * 2,
-  12)
+g <- graph_from_data_frame(d = edges, vertices = nodes, directed = FALSE)
+saveRDS(g, "~/NB_lncRNA/output/code/BioInsights/graphgraph_object_K12.RDS")
 
-V(g_lnc_mod)$color <- ifelse(
-  V(g_lnc_mod)$type == "lncRNA",
-  "#aa5967",
-  "darkcyan")
+```
 
-E(g_lnc_mod)$color <- ifelse(
-  edge_df$sign == "positive",
-  "lightgreen",
-  "midnightblue"
-)
+```{r}
 
-E(g_lnc_mod)$width <- edge_df$weight * 3
 
-plot(
-  g_lnc_mod,
-  layout = layout_with_fr,
-  vertex.label.cex = 0.7,
-  vertex.frame.color = "white",
-  main = "lncRNA–PPI Module Network"
-)
+
+```
+
+
+```{r}
+
+```
+
+
+# 
+```{r}
+
+```
+```{r}
+
+```
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+# 
+
+```{r}
+
+```
+
+
+```{r}
+
 ```

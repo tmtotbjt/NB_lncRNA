@@ -59,7 +59,7 @@ res <- top$table
 # Bendras mėginių ir raiškos pasižiūrėjimas {.tabset}
 ```{r}
 res$logFC <- as.numeric(as.character(res$logFC))
-genesFC <- rownames(res)[res$logFC >= log2(3) & res$PValue < 0.05]
+genesFC <- rownames(res)[res$FDR < 0.05]
 logcpm <- cpm(y, log=TRUE)
 
 #atsifiltravimas
@@ -74,11 +74,11 @@ keep_pc <- rowSums(pc_mat > 1) >= 2
 pc_mat <- pc_mat[keep_pc, ]
 
 lnc_res <- res[rownames(res) %in% rownames(lnc_mat), ]
-lnc_top <- lnc_res[abs(lnc_res$logFC) > 1 & lnc_res$PValue < 0.05, ]
+lnc_top <- lnc_res[lnc_res$FDR < 0.05, ]
 lnc_mat_top <- lnc_mat[rownames(lnc_mat) %in% rownames(lnc_top), ]
 
 pc_res <- res[rownames(res) %in% rownames(pc_mat), ]
-pc_top <- pc_res[abs(pc_res$logFC) > 1.5 & pc_res$PValue < 0.05, ]
+pc_top <- pc_res[pc_res$FDR < 0.05, ]
 pc_mat_top <- pc_mat[rownames(pc_mat) %in% rownames(pc_top), ]
 ```
 
@@ -148,21 +148,35 @@ g3 <- grid.grabExpr(draw(p3))
 gridExtra::grid.arrange(g1, g2, g3, ncol = 3)
 ```
 
-
 ## Pagal raišką
-Matoma, jog tam tikros mRNA koreliuoja su lncRNA.
 
-Matomas ir atskiras klasteris, kuris gali aiškinti K12Cu2 atsiskyrimą nuo kitų mėginių.
+Pagrinde matomi du klasteriai, kur didžioji dalis koreliuoja teigiamai.
+Taip pat pastebimi smulkesni kalsteriai.
+Gali būti stebimi klasteriai, kurie atsirado ne dėl POS NEG skirtumų, bet dėl skirtumų tarp kolnų.
 ```{r}
-# pearson sutinkama straipsniuose, bet yra kad siūlo spearman
 cor_matrix <- cor(t(lnc_mat_top), t(pc_mat_top), method = "spearman")
+p1 <- cor_heatmap(cor_matrix, "Su efektu")
+```
+
+Atmetus poveikio grupę, matomi klasteriai, kurie gali kinta kartu.
+```{r}
+fit <- lmFit(lnc_mat_top, design)
+mat_lnc <- residuals.MArrayLM(fit, lnc_mat_top)
+
+fit <- lmFit(pc_mat_top, design)
+mat_pc <- residuals.MArrayLM(fit, pc_mat_top)
+
+cor_matrix <- cor(t(mat_lnc), t(mat_pc), method = "spearman")
 cor_df <- reshape2::melt(cor_matrix)
 colnames(cor_df) <- c("lncRNA", "mRNA", "value")
-pheatmap(cor_matrix,
-         clustering_distance_rows = "euclidean",
-         clustering_distance_cols = "euclidean",
-         show_rownames = FALSE,
-         show_colnames = FALSE)
+p2 <- cor_heatmap(cor_matrix, "Be efekto")
+```
+
+```{r, fig.width=12}
+g1 <- grid.grabExpr(draw(p1))
+g2 <- grid.grabExpr(draw(p2))
+
+gridExtra::grid.arrange(g1, g2, ncol = 2)
 ```
 
 
@@ -191,3 +205,34 @@ kegg_proc
 #kegg_cat
 ```
 
+# Tinklas
+```{r, fig.height=10, fig.width=10}
+g <- readRDS("~/NB_lncRNA/output/code/BioInsights/graphgraph_object_K12.RDS")
+vertex_colors <- ifelse(V(g)$type == "lncRNA", "skyblue", "salmon")
+plot(g,
+     vertex.color = vertex_colors,
+     vertex.size = 5,
+     vertex.label.cex = 0.7,
+     edge.width = abs(E(g)$weight)*2,
+     edge.color = "grey")
+
+legend("topright", 
+       legend = c("lncRNA", "mRNA"),
+       col = c("skyblue", "salmon"),
+       pch = 21,    # symbol for nodes
+       pt.bg = c("skyblue", "salmon"),
+       pt.cex = 2,
+       bty = "n")
+
+```
+
+```{r}
+table(V(g)$type)
+vcount(g)
+
+ecount(g)
+```
+Vienas didelis tinklas ir kiti maži (pagal komponentų viename tinkle sk.)
+```{r}
+components(g)$csize
+```
