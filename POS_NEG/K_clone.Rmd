@@ -4,8 +4,6 @@ p_load(rtracklayer, GenomicRanges, dplyr, data.table, dplyr, DESeq2, ggplot2, gg
       readxl, biomaRt, clusterProfiler, org.Hs.eg.db, DT, ChIPseeker, TxDb.Hsapiens.UCSC.hg38.knownGene, 
       pheatmap, flashClust, ggraph, ComplexHeatmap, gridExtra, grid)
 knitr::opts_chunk$set(fig.width=6, fig.height=6, echo = T)
-pthres <- 0.1
-lfc <- log2(1.25)
 source("~/NB_lncRNA/code/BioInsights/more_code.R")
 ```
 
@@ -21,7 +19,6 @@ sampleInfo <- sampleInfo[c(3, 4, 1, 2),]
 ```{r}
 #lncRNA
 duomenys <- readRDS("~/NB_lncRNA/output/code/lncRNA/DataQC/data2DEG.RDS")
-#pachekint kokie genai (ar tik lncRNA ar ir pc)
 
 list_of_4 <- duomenys[[1]]
 counts_lnc <- list_of_4[[2]]
@@ -46,8 +43,7 @@ y <- DGEList(counts=countai, group=Status)
 y <- calcNormFactors(y)
 design <- model.matrix(~Status)
 
-# normalus variabilumas žmogui 0,4
-# genetiškai identiškiems 0,1
+# normalus variabilumas žmogui 0,4, genetiškai identiškiems 0,1 (edgeR)
 y$common.dispersion <- 0.1
 
 fit <- glmFit(y, design)

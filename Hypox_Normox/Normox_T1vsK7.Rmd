@@ -1,0 +1,161 @@
+```{r}
+library(pacman)
+p_load(rtracklayer, GenomicRanges, dplyr, data.table, DESeq2, ggplot2, ggrepel, tidyr, 
+      readxl, biomaRt, clusterProfiler, org.Hs.eg.db, DT, ChIPseeker, TxDb.Hsapiens.UCSC.hg38.knownGene, 
+      pheatmap, flashClust, ggraph, ComplexHeatmap, gridExtra, grid, tidygraph, edgeR)
+knitr::opts_chunk$set(fig.width=6, fig.height=6, echo = T)
+```
+```{r}
+tmp <-  readRDS("~/NB_lncRNA/output/code/lncRNA/DataQC/data2DEG.RDS")
+sampleInfo <- tmp[[2]]
+samples2do <- c("T1cN1", "T1cN2","K7cN1", "K7cN2")
+sampleInfo <- sampleInfo[Barcode %in% samples2do, ] 
+sampleInfo$Group <- sampleInfo$Clone
+```
+```{r}
+DT::datatable(sampleInfo[, .(sample, Clone, Oxygen, Treatment)], class = 'cell-border stripe')
+```
+```{r}
+#lncRNA
+duomenys <- readRDS("~/NB_lncRNA/output/code/lncRNA/DataQC/data2DEG.RDS")
+
+list_of_4 <- duomenys[[1]]
+counts_lnc <- list_of_4[[2]]
+counts_lnc <- counts_lnc[, samples2do]
+```
+```{r}
+#Protein coding
+duomenys <- readRDS("~/NB_lncRNA/input/data2DEG_protein.RDS")
+
+list_of_4 <- duomenys[[1]]
+counts_pc <- list_of_4[[2]]
+counts_pc <- counts_pc[, samples2do]
+```
+```{r}
+library(edgeR)
+countai <- rbind(counts_lnc, counts_pc)
+
+Status <- factor(sampleInfo$Clone, levels = c("TC1", "K7"))
+y <- DGEList(counts=countai, group=Status)
+y <- calcNormFactors(y)
+design <- model.matrix(~Status)
+
+# normalus variabilumas žmogui 0,4, genetiškai identiškiems 0,1 (edgeR)
+y$common.dispersion <- 0.4
+
+fit <- glmFit(y, design)
+lrt <- glmLRT(fit, coef = "StatusK7")
+
+top <- topTags(lrt, n=Inf)
+res <- top$table
+```
+
+
+# Bendras mėginių ir raiškos pasižiūrėjimas {.tabset}
+```{r}
+res$logFC <- as.numeric(as.character(res$logFC))
+genesFC <- rownames(res)[res$FDR < 0.05]
+logcpm <- cpm(y, log=TRUE)
+
+#atsifiltravimas
+lnc_genes <- rownames(counts_lnc)
+pc_genes  <- setdiff(rownames(logcpm), lnc_genes)
+
+lnc_mat <- logcpm[lnc_genes, , drop=FALSE]
+pc_mat  <- logcpm[pc_genes, , drop=FALSE]
+keep_lnc <- rowSums(lnc_mat > 0) >= 2
+lnc_mat <- lnc_mat[keep_lnc, ]
+keep_pc <- rowSums(pc_mat > 0) >= 2
+pc_mat <- pc_mat[keep_pc, ]
+
+
+lnc_res <- res[rownames(res) %in% rownames(lnc_mat), ]
+lnc_top <- lnc_res[lnc_res$FDR < 0.05, ]
+lnc_mat_top <- lnc_mat[rownames(lnc_mat) %in% rownames(lnc_top), ]
+
+pc_res <- res[rownames(res) %in% rownames(pc_mat), ]
+pc_top <- pc_res[pc_res$FDR < 0.05, ]
+pc_mat_top <- pc_mat[rownames(pc_mat) %in% rownames(pc_top), ]
+```
+
+
+## Koreliacija
+Atsiskiria vienodai
+```{r, fig.height= 10, fig.width = 18}
+a <- get_cor(counts_lnc, title = "lncRNA")
+b <-get_cor(counts_pc, title = "mRNA")
+
+a | b
+```
+
+## PCA
+Atsiskiria labai panašiai, bet didesnis variabilumas matomas su mRNR (nėra labai didelio skirtumo su tik su lncRNA)
+```{r}
+mat_abu <- rbind(lnc_mat_top, pc_mat_top)
+get_pca(lnc_mat_top, sampleInfo) + ggtitle("tik lncRNA")
+get_pca(pc_mat_top, sampleInfo)+ ggtitle("tik mRNA")
+```
+
+## Heatmap
+```{r}
+annotation_col <- data.frame(Group = sampleInfo$Group)
+ann_colors = list(Group = c(TC1="#54aaaa", K7="#e2a4ad"))
+rownames(annotation_col) <- sampleInfo$Barcode
+p1 <- pheatmap(logcpm[rownames(lnc_mat_top),],
+         scale = "row",
+         annotation_col = annotation_col,
+         annotation_colors = ann_colors,
+         show_rownames = FALSE,
+         cluster_rows = TRUE,
+         main = "lncRNA",
+         silent = TRUE)
+
+p2 <- pheatmap(logcpm[rownames(pc_mat_top),],
+         scale = "row",
+         annotation_col = annotation_col,
+         annotation_colors = ann_colors,
+         show_rownames = FALSE,
+         cluster_rows = TRUE,
+         main= "mRNA",
+         silent = TRUE)
+```
+```{r, fig.height = 7, fig.width=15}
+g1 <- grid.grabExpr(draw(p1))
+g2 <- grid.grabExpr(draw(p2))
+
+gridExtra::grid.arrange(g1, g2, ncol = 2)
+```
+
+lncRNA mediana arti 0 (beveik nepakitusi)
+
+mRNR mediana 0,32 - matomas didesnis skirtumas tarp klonų per mRNR
+```{r}
+res_lnc <- res[rownames(res) %in% rownames(counts_lnc), ]
+res_pc  <- res[rownames(res) %in% rownames(counts_pc), ]
+
+median(abs(res_lnc$logFC))
+median(abs(res_pc$logFC))
+```
+
+```{r}
+boxplot(abs(res_lnc$logFC), abs(res_pc$logFC),
+        names=c("lncRNA","mRNA"),
+        main="|log2FC| between clones",
+        col=c("skyblue","orange"))
+```
+
+```{r, fig.height = 7, fig.width=15}
+par(mfrow=c(1,2))
+hist(res_lnc$PValue, main="lncRNA p-values", col="skyblue")
+hist(res_pc$PValue, main="mRNA p-values", col="orange")
+```
+
+```{r}
+hist(abs(res_lnc$logFC), breaks=50, col=rgb(1,0,0,0.5),
+     main="Distribution of |logFC|", xlab="|log2 Fold Change|", xlim=c(0,2))
+hist(abs(res_pc$logFC), breaks=50, col=rgb(0,0,1,0.5), add=TRUE)
+legend("topright", legend=c("lncRNA","mRNA"), fill=c(rgb(1,0,0,0.5), rgb(0,0,1,0.5)))
+```
+
+
+

@@ -1,11 +1,9 @@
 ```{r}
 library(pacman)
-p_load(rtracklayer, GenomicRanges, dplyr, data.table, dplyr, DESeq2, ggplot2, ggrepel, tidyr, 
+p_load(rtracklayer, GenomicRanges, dplyr, data.table, DESeq2, ggplot2, ggrepel, tidyr, 
       readxl, biomaRt, clusterProfiler, org.Hs.eg.db, DT, ChIPseeker, TxDb.Hsapiens.UCSC.hg38.knownGene, 
       pheatmap, flashClust, ggraph, ComplexHeatmap, gridExtra, grid, tidygraph, edgeR)
 knitr::opts_chunk$set(fig.width=6, fig.height=6, echo = T)
-pthres <- 0.1
-lfc <- log2(1.25)
 source("~/NB_lncRNA/code/BioInsights/more_code.R")
 ```
 ```{r}
@@ -49,10 +47,7 @@ counts_pc <- counts_pc[, samples2do]
 #length <- list_of_4[[3]]
 #length <- length[, samples2do]
 
-dds <- DESeqDataSetFromMatrix(countData = round(counts_pc), 
-                              colData = sampleInfo, 
-                              design = ~Group)
-dds <- DESeq(dds)
+dds <- readRDS("~/NB_lncRNA/output/code/BioInsights/POS_NEG/dds_lnc.RDS")
 vsd_pc <- vst(dds)
 mat_pc <- assay(vsd_pc)
 res_pc <- results(dds) %>% as.data.table(., keep.rownames=TRUE)
