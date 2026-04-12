@@ -1,0 +1,92 @@
+```{r}
+library(pacman)
+p_load(rtracklayer, GenomicRanges, dplyr, data.table, DESeq2, ggplot2, ggrepel, tidyr, 
+      readxl, biomaRt, clusterProfiler, org.Hs.eg.db, DT, ChIPseeker, TxDb.Hsapiens.UCSC.hg38.knownGene, 
+      pheatmap, flashClust, ggraph, ComplexHeatmap, gridExtra, grid, tidygraph, edgeR)
+knitr::opts_chunk$set(fig.width=6, fig.height=6, echo = T)
+source("~/NB_lncRNA/code/BioInsights/more_code.R")
+```
+```{r}
+tmp <-  readRDS("~/NB_lncRNA/output/code/lncRNA/DataQC/data2DEG.RDS")
+sampleInfo <- tmp[[2]]
+samples2do <- c("T1cH1", "T1cH2","K7cH1", "K7cH2")
+sampleInfo <- sampleInfo[Barcode %in% samples2do, ] 
+sampleInfo$Group <- sampleInfo$Clone
+```
+```{r}
+DT::datatable(sampleInfo[, .(sample, Clone, Oxygen, Treatment)], class = 'cell-border stripe')
+```
+```{r}
+#lncRNA
+duomenys <- readRDS("~/NB_lncRNA/output/code/lncRNA/DataQC/data2DEG.RDS")
+
+list_of_4 <- duomenys[[1]]
+counts_lnc <- list_of_4[[2]]
+counts_lnc <- counts_lnc[, samples2do]
+
+#Protein coding
+duomenys <- readRDS("~/NB_lncRNA/input/data2DEG_protein.RDS")
+
+list_of_4 <- duomenys[[1]]
+counts_pc <- list_of_4[[2]]
+counts_pc <- counts_pc[, samples2do]
+```
+
+# Koreliacija
+
+Didesnis skirtumas tarp klonų matomas mRNR raiškoje
+```{r, fig.width = 14}
+a <- get_cor(counts_lnc, title = "lncRNA")
+b <-get_cor(counts_pc, title = "mRNA")
+
+a | b
+```
+# PCA
+
+Atsiskyrimas tarp klonų didesnis mRNA raiškos duomenyse
+```{r}
+log_lnc <- log2(counts_lnc + 1)
+log_pc  <- log2(counts_pc + 1)
+pca_lnc <- prcomp(t(log_lnc))
+pca_pc  <- prcomp(t(log_pc))
+```
+```{r, fig.width = 15}
+a <- getpca(log_lnc, sampleInfo) + ggtitle("PCA lncRNA")
+b <- getpca(log_pc, sampleInfo) + ggtitle("PCA mRNA")
+a | b
+```
+
+# Skaitinis palyginimas
+## Efekto dydžio pasiskirstymas
+```{r}
+clone <- c("TC1","K7","K7")
+sep_lnc <- get_dist(log_lnc, clone)
+sep_pc  <- get_dist(log_pc, clone)
+
+# Aukštesnis sk. rodo didesnį atsiskyrimą tarp klonų
+cat("lncRNA atsiskyrimo tarp klonų: ", sep_lnc$ratio, "\n")
+cat("mRNA atsiskyrimo tarp klonų: ", sep_pc$ratio, "\n")
+```
+
+Atsiskyrimas tarp klonų pagal mRNA yra stipresnis
+
+## Mediana
+```{r}
+logFC_lnc <- rowMeans(log_lnc[, clone=="K7", drop=FALSE]) - 
+             rowMeans(log_lnc[, clone=="TC1", drop=FALSE])
+
+logFC_pc  <- rowMeans(log_pc[, clone=="K7", drop=FALSE]) - 
+             rowMeans(log_pc[, clone=="TC1", drop=FALSE])
+
+cat("Mediana |logFC| (lncRNA):", median(abs(logFC_lnc)), "\n")
+cat("Mediana |logFC| (mRNA):  ", median(abs(logFC_pc)), "\n")
+```
+
+mRNA rodo ryškesnius klonams būdingus raiškos pokyčius.
+
+```{r}
+boxplot(abs(logFC_lnc), abs(logFC_pc),
+        names=c("lncRNA","mRNA"),
+        main="|log2FC| tarp klonų",
+        col=c("skyblue","orange"))
+```

@@ -1,0 +1,214 @@
+```{r}
+library(pacman)
+p_load(rtracklayer, GenomicRanges, dplyr, data.table, DESeq2, ggplot2, ggrepel, tidyr, 
+      readxl, biomaRt, clusterProfiler, org.Hs.eg.db, DT, ChIPseeker, TxDb.Hsapiens.UCSC.hg38.knownGene, 
+      pheatmap, flashClust, ggraph, ComplexHeatmap, gridExtra, grid, tidygraph, edgeR)
+source("~/NB_lncRNA/code/BioInsights/more_code.R")
+knitr::opts_chunk$set(fig.width=6, fig.height=6, echo = T)
+```
+```{r}
+tmp <-  readRDS("~/NB_lncRNA/output/code/lncRNA/DataQC/data2DEG.RDS")
+sampleInfo <- tmp[[2]]
+samples2do <- c("NeNR1", "NeNR2", "T1cN1", "T1cN2","K12c1", "K12c2", "K7cN1", "K7cN2")
+sampleInfo <- sampleInfo[Barcode %in% samples2do, ] 
+sampleInfo$Group <- sampleInfo$POSNEG
+sampleInfo <- sampleInfo[c(7, 8, 1, 2, 5, 6, 3, 4),]
+```
+```{r}
+DT::datatable(sampleInfo[, .(sample, Clone,  Group)], class = 'cell-border stripe')
+```
+```{r}
+#Protein coding
+duomenys <- readRDS("~/NB_lncRNA/input/data2DEG_protein.RDS")
+
+list_of_4 <- duomenys[[1]]
+counts_pc <- list_of_4[[2]]
+counts_pc <- counts_pc[, samples2do]
+
+dds <- readRDS("~/NB_lncRNA/output/code/BioInsights/POS_NEG/dds_lnc.RDS")
+vsd_pc <- vst(dds)
+mat_pc <- assay(vsd_pc)
+res_pc <- results(dds) %>% as.data.table(., keep.rownames=TRUE)
+
+resultsNames(dds)
+```
+```{r}
+#daug skirtingu
+mes <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets.xlsx", sheet = 1)
+adrn <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets.xlsx", sheet = 2)
+NCC <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets.xlsx", sheet = 3)
+NonA <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets.xlsx", sheet = 4)
+crmff <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets.xlsx", sheet = 5)
+symblast <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets.xlsx", sheet = 6)
+SCPs <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets.xlsx", sheet = 7)
+OSL <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets.xlsx", sheet = 8)
+```
+
+# Markeriai iš straipsnių {.tabset}
+
+## Kelių straipsnių
+[van Groningen](http://dx.doi.org/10.1038/ng.3899), [Jansky 2021](doi.org/10.1038/s41588-021-00806-1), 
+[Dong 2020](https://doi.org/10.1016/j.ccell.2020.08.014), [Kameneva 2021](10.1038/s41588-021-00818-x)
+
+Atliko single-cell, iš kurių gauti marekeriai, neuroblastomos identitetui
+
+### Ląstelės panašesnė į MES ar ADRN
+
+- MES - mezenchiminėms ląstelėms būdingi genai (gydymui atsparūs)
+
+- ADRN - adrenerginėm ląstelėms būdingi genai (gydimui jautrūs)
+ 
+```{r}
+annotation_col <- data.frame(Group = sampleInfo$Group)
+ann_colors = list(Group = c(NEG="cyan", POS="lightpink"))
+
+all_genes <- unique(c(mes$gene_id, adrn$gene_id))
+gene_sets <- list(Mesenchymal = mes$gene_id, Adrenergic = adrn$gene_id)
+set.seed(123)
+heatmap_ident(mat_pc, all_genes, gene_sets, ann_colors, annotation_col)
+```
+
+### Ląstelių diferenciacijos lygmuo
+
+- Nervinė ketera ar Noradrenerginė grupė
+
+- iš švano ląstelių atsiranda neuroblastai ir chromafininės ląstelės
+
+```{r}
+all_genes <- unique(c(NCC$gene_id, NonA$gene_id, crmff$gene_id, symblast$gene_id, SCPs$gene_id))
+gene_sets <- list(Neural_Crest_like = NCC$gene_id, Noradrenergic = NonA$gene_id, Chromaffin = crmff$gene_id, Neuroblasts = symblast$gene_id, Shwann_cells_presucor = SCPs$gene_id)
+set.seed(123)
+heatmap_ident(mat_pc, all_genes, gene_sets, ann_colors, annotation_col)
+```
+
+
+## Markeriai iš Gerda Kildisiute et. all 2021 {.tabset}
+[Tumor to normal single-cell mRNA comparisons reveal a pan-neuroblastoma cancer cell](https://doi.org/10.1126/sciadv.abd3311).
+
+```{r}
+SCPs <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets_lith.xlsx", sheet = 1)
+Bridge <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets_lith.xlsx", sheet = 2)
+SymChrmff <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets_lith.xlsx", sheet = 3)
+chrmff <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets_lith.xlsx", sheet = 4)
+mes_k <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets_lith.xlsx", sheet = 5)
+endothel <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets_lith.xlsx", sheet = 6)
+erytoblasts <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets_lith.xlsx", sheet = 7)
+cortex <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets_lith.xlsx", sheet = 8)
+leuko <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets_lith.xlsx", sheet = 9)
+some_cells <-read_excel("~/NB_lncRNA/input/cell_ident/gene_sets_lith.xlsx", sheet = 10)
+NB <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets_lith.xlsx", sheet = 10)
+```
+
+### MES, NB ir other cells
+ 
+```{r}
+all_genes <- unique(c(cortex$gene_id, mes_k$gene_id, NB$gene_id, endothel$gene_id, erytoblasts$gene_id, leuko$gene_id, some_cells$gene_id))
+gene_sets <- list(Cortex = cortex$gene_id, Mesenchymal = mes_k$gene_id, Neuroblastoma = NB$gene_id, Endothel = endothel$gene_id, Erytoblasts = erytoblasts$gene_id, Leukocytes = leuko$gene_id, Other = some_cells$gene_id)
+set.seed(123)
+heatmap_ident(mat_pc, all_genes, gene_sets, ann_colors, annotation_col)
+```
+
+### Ląstelių diferenciacijos lygmuo
+
+-  most cancer cells show strong chromaffin cell-like features
+
+```{r}
+all_genes <- unique(c(SCPs$gene_id, Bridge$gene_id, SymChrmff$gene_id, chrmff$gene_id))
+gene_sets <- list(Schwann_pres = SCPs$gene_id, Bridge = Bridge$gene_id, 'Sympathoblasts/Chromaffin' = SymChrmff$gene_id, Chromaffin = chrmff$gene_id)
+set.seed(123)
+heatmap_ident(mat_pc, all_genes, gene_sets, ann_colors, annotation_col)
+```
+
+# Iš single-cell {.tabset}
+
+## Gerda Kildisiute et. all 2021
+
+```{r}
+avg_expr <- readRDS("~/NB_lncRNA/output/code/sc/avg_expr.RDS")
+
+common_genes <- intersect(rownames(avg_expr), rownames(counts_pc))
+
+
+cor_mat <- cor(counts_pc[common_genes, ],
+               avg_expr[common_genes, ],
+               method = "spearman")
+
+set.seed(773)
+pheatmap(cor_mat,
+         cluster_rows = TRUE,
+         cluster_cols = TRUE,
+         annotation_row = annotation_col,
+         main = "Ląstelių tipai",
+         display_numbers = FALSE,
+         color = colorRampPalette(c("blue", "white", "red"))(100))
+```
+
+## Dong et. all 2020
+
+Ląstelės, kurios gautos iš embriono (4 savaitės po apvaisinimo)
+
+```{r}
+avg_expr <- readRDS("~/NB_lncRNA/output/code/sc/avg_exprDONG.RDS")
+
+common_genes <- intersect(rownames(avg_expr), rownames(counts_pc))
+
+cor_mat <- cor(counts_pc[common_genes, ],
+               avg_expr[common_genes, ],
+               method = "spearman")
+
+cor_mat <- cor_mat[,-c(3)]
+
+set.seed(773)
+pheatmap(cor_mat,
+         cluster_rows = TRUE,
+         cluster_cols = TRUE,
+         annotation_row = annotation_col,
+         main = "Ląstelių tipai, embrioniniai",
+         display_numbers = FALSE,
+         color = colorRampPalette(c("blue", "white", "red"))(100))
+```
+
+F2, F7 - mėginiai 8 savaitės po apvaisinimo
+
+```{r}
+avg_expr <- readRDS("~/NB_lncRNA/output/code/sc/avg_exprDONG_F2_7.RDS")
+
+rownames(counts_pc) <- sub("\\..*$", "", rownames(counts_pc))
+common_genes <- intersect(rownames(avg_expr), rownames(counts_pc))
+
+cor_mat <- cor(counts_pc[common_genes, ],
+               avg_expr[common_genes, ],
+               method = "spearman")
+
+set.seed(773)
+pheatmap(cor_mat,
+         cluster_rows = TRUE,
+         cluster_cols = TRUE,
+         annotation_row = annotation_col,
+         main = "Ląstelių tipai, antinksčių (F2, F7)",
+         display_numbers = FALSE,
+         color = colorRampPalette(c("blue", "white", "red"))(100))
+```
+
+F106, F107 - mėginiai 14 savaitės po apvaisinimo
+
+```{r}
+avg_expr <- readRDS("~/NB_lncRNA/output/code/sc/avg_exprDONG_F106_107.RDS")
+
+common_genes <- intersect(rownames(avg_expr), rownames(counts_pc))
+
+cor_mat <- cor(counts_pc[common_genes, ],
+               avg_expr[common_genes, ],
+               method = "spearman")
+
+
+set.seed(773)
+pheatmap(cor_mat,
+         cluster_rows = TRUE,
+         cluster_cols = TRUE,
+         annotation_row = annotation_col,
+         main = "Ląstelių tipai, antinksčių (F106, F107)",
+         display_numbers = FALSE,
+         color = colorRampPalette(c("blue", "white", "red"))(100))
+```
+

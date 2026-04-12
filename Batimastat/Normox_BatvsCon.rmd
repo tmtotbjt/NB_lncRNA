@@ -113,10 +113,8 @@ get_pca(mat, sampleInfo) + ggtitle("Bendras")
 # Pakitę baltymą koduojantys genai
 
 ```{r}
-sig_lnc_up <- subset(sig_lncRNAs, padj < 0.05 & log2FoldChange > 1)
-sig_lnc_down <- subset(sig_lncRNAs, padj < 0.05 & log2FoldChange < -1)
-sig_pc_up <- subset(sig, padj < 0.05 & log2FoldChange >= log2(2))
-sig_pc_down <- subset(sig, padj < 0.05 & log2FoldChange <= (-1)*log2(2))
+sig_pc_up <- subset(sig, padj < 0.05 & log2FoldChange > 0)
+sig_pc_down <- subset(sig, padj < 0.05 & log2FoldChange < 0)
 ```
 Padidėjusios raiškos genai susiję su: Atsaku į deguonies lygį.
 
@@ -243,9 +241,6 @@ Pagrinde genai susiję su atsaku į deguonies lygį ir metaboliniais procesais.
 # Pasidaryti atskirus tegiamai ir neigiamai koreliuojantiems (?)
 cor_df_sig <- subset(cor_df, abs(value) > 0.85)
 
-rownames(sig_lnc_up) <- sub("\\..*$", "", rownames(sig_lnc_up))
-rownames(sig_lnc_down) <- sub("\\..*$", "", rownames(sig_lnc_down))
-
 #sudaro klasterius
 genes <- unique(as.character(cor_df_sig$mRNA[cor_df_sig$lncRNA %in% rownames(mat_filt_lnc)]))
 ```
@@ -348,57 +343,4 @@ plots <- lapply(top5_lnc, function(lnc){
 
 plots <- plots[!sapply(plots, is.null)]
 plot_grid(plotlist = plots, ncol = 2) 
-```
-
-## Lentelė su top lncRNA ir jų mRNA reguliacija
-```{r}
-lncGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/Bastimat/lncGR_NBC_padj.RDS")
-geneGR <- readRDS("~/NB_lncRNA/output/code/BioInsights/Bastimat/geneGR_NBC_padj.RDS")
-
-geneGR_df <- as.data.frame(geneGR)
-res_pc <- sig %>%
-  mutate(symbol = geneGR_df$gene_name[match(rn, geneGR_df$gene_id)]) %>%
-  mutate(mRNA_regulation = case_when(
-    log2FoldChange > 0 ~ "up",
-    log2FoldChange < 0 ~ "down",
-    TRUE ~ "no_change")) %>%
-  select(rn, symbol, log2FoldChange, mRNA_regulation)
-
-lncGR_df <- as.data.frame(lncGR)
-res_lnc <- sig_lncRNAs %>%
-  mutate(symbol = lncGR_df$gene_name[match(rn, lncGR_df$gene_id)]) %>%
-  mutate(lncRNA_regulation = case_when(
-    log2FoldChange > 0 ~ "up",
-    log2FoldChange < 0 ~ "down",
-    TRUE ~ "no_change")) %>%
-  select(rn, symbol, log2FoldChange, lncRNA_regulation)
-
-lnc_reg <- res_lnc %>%
-  select(symbol, log2FoldChange) %>%
-  mutate(lnc_direction = ifelse(log2FoldChange > 0, "up", "down"))
-
-mRNA_reg <- res_pc %>%
-  select(symbol, log2FoldChange) %>%
-  mutate(mRNA_direction = ifelse(log2FoldChange > 0, "up", "down"))
-
-lnc_nodes <- V(g)[type == "lncRNA"]
-lnc_mrna_table <- do.call(rbind, lapply(lnc_nodes$symbol, function(lnc) {
-  
-  neigh <- neighbors(g, lnc)
-  target_mrna <- V(g)$symbol[neigh][V(g)$type[neigh] == "protein"]
-  
-  if(length(target_mrna) == 0) return(NULL)
-  
-  data.frame(
-    lncRNA = lnc,
-    target_mRNA = target_mrna,
-    stringsAsFactors = FALSE ) }))
-
-lnc_mrna_table <- lnc_mrna_table %>%
-  left_join(lnc_reg %>% select(symbol, lnc_direction), by = c("lncRNA" = "symbol")) %>%
-  left_join(mRNA_reg %>% select(symbol, mRNA_direction), by = c("target_mRNA" = "symbol"))
-lnc_mrna <- lnc_mrna_table %>%
-  filter(lncRNA %in% top5_lnc)
-
-datatable(lnc_mrna, options = list(pageLength = 10, scrollX = TRUE))
 ```

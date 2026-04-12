@@ -106,8 +106,6 @@ a | b| c
 
 # Pakitę baltymą koduojantys genai
 ```{r}
-sig_lnc_up <- subset(sig_lncRNAs, padj < 0.05 & log2FoldChange > 1)
-sig_lnc_down <- subset(sig_lncRNAs, padj < 0.05 & log2FoldChange < -1)
 sig_pc_up <- subset(sig, padj < 0.05 & log2FoldChange > 0)
 sig_pc_down <- subset(sig, padj < 0.05 & log2FoldChange < 0)
 ```
@@ -137,34 +135,20 @@ ego <- enrichGO(gene          = rownames(sig_pc_down),
 d <- dotplot(ego, showCategory=10) + ggtitle("GO sumažėjusios raiškos")
 
 ensembl_ids <-  rownames(sig_pc_up)
-entrezID <- mapIds(
-  org.Hs.eg.db,
-  keys = ensembl_ids,
-  column = "ENTREZID",
-  keytype = "ENSEMBL",
-  multiVals = "first")
+entrezID <- mapIds(org.Hs.eg.db, keys = ensembl_ids, column = "ENTREZID", keytype = "ENSEMBL", multiVals = "first")
 
 entrezID <- na.omit(entrezID)
-kegg <- enrichKEGG(gene         = entrezID,
-                   organism     = 'hsa',
-                   pvalueCutoff = 0.05)
+kegg <- enrichKEGG(gene  = entrezID, organism = 'hsa', pvalueCutoff = 0.05)
 a <- dotplot(kegg, showCategory=10) +ggtitle("KEGG su padidėjusios raiškos genais")
 
 ensembl_ids <-  rownames(sig_pc_down)
-entrezID <- mapIds(
-  org.Hs.eg.db,
-  keys = ensembl_ids,
-  column = "ENTREZID",
-  keytype = "ENSEMBL",
-  multiVals = "first")
+entrezID <- mapIds(org.Hs.eg.db, keys = ensembl_ids, column = "ENTREZID", keytype = "ENSEMBL", multiVals = "first")
 
 entrezID <- na.omit(entrezID)
-kegg <- enrichKEGG(gene         = entrezID,
-                   organism     = 'hsa',
-                   pvalueCutoff = 0.05)
+kegg <- enrichKEGG(gene = entrezID, organism = 'hsa', pvalueCutoff = 0.05)
 b <- dotplot(kegg, showCategory=10) +ggtitle("KEGG su sumažėjusios raiškos genais")
-
 ```
+
 Padidėjusios raiškos genai susiję su: medžiagų, jonų transportu, medžiagų metabolizmu
 ```{r, fig.width=12}
 c | a

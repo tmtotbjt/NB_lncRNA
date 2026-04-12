@@ -56,8 +56,7 @@ res <- top$table
 
 # Bendras mėginių ir raiškos pasižiūrėjimas {.tabset}
 ```{r}
-res$logFC <- as.numeric(as.character(res$logFC))
-genesFC <- rownames(res)[res$logFC >= log2(3) & res$FDR < 0.05]
+genesFC <- rownames(res)[res$FDR < 0.05]
 logcpm <- cpm(y, log=TRUE)
 
 #atsifiltravimas

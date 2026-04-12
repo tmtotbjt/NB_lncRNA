@@ -98,7 +98,6 @@ mRNA <- sig %>%
   dplyr::select(gene_id, gene_name), by = c("rn" = "gene_id"))
 mRNA$rn <- sub("\\..*$", "", mRNA$rn)
 
-geneGR_df$gene_id <- sub("\\..*$", "", geneGR_df$gene_id)
 sig_links <- merge(sig_links,
                    geneGR_df[, c("gene_id", "gene_name")],
                    by.x = "mRNA_id",

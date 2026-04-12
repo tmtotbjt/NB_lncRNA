@@ -1,0 +1,159 @@
+```{r}
+library(pacman)
+p_load(rtracklayer, GenomicRanges, dplyr, data.table, dplyr, DESeq2, ggplot2, ggrepel, tidyr, 
+      readxl, biomaRt, clusterProfiler, org.Hs.eg.db, DT, ChIPseeker, TxDb.Hsapiens.UCSC.hg38.knownGene, 
+      pheatmap, flashClust, ggraph, ComplexHeatmap, gridExtra, grid, ggvenn)
+knitr::opts_chunk$set(fig.width=6, fig.height=6, echo = T)
+source("~/NB_lncRNA/code/BioInsights/more_code.R")
+```
+```{r}
+tmp <-  readRDS("~/NB_lncRNA/output/code/lncRNA/DataQC/data2DEG.RDS")
+sampleInfo <- tmp[[2]]
+samples2do <- c("K12c1", "K12c2", "K7cN1", "K7cN2")
+sampleInfo <- sampleInfo[Barcode %in% samples2do, ] 
+sampleInfo$Group <- sampleInfo$POSNEG
+sampleInfo <- sampleInfo[c(3, 4, 1, 2),]
+```
+```{r}
+DT::datatable(sampleInfo[, .(sample, Clone,  Group)], class = 'cell-border stripe')
+```
+```{r}
+#Protein coding
+duomenys <- readRDS("~/NB_lncRNA/input/data2DEG_protein.RDS")
+
+list_of_4 <- duomenys[[1]]
+counts_pc <- list_of_4[[2]]
+counts_pc <- counts_pc[, samples2do]
+```
+```{r}
+library(edgeR)
+
+rownames(counts_pc) <- sub("\\..*$", "", rownames(counts_pc))
+Status <- factor(sampleInfo$Group, levels = c("NEG", "POS"))
+y <- DGEList(counts=counts_pc, group=Status)
+y <- calcNormFactors(y)
+design <- model.matrix(~Status)
+
+# normalus variabilumas žmogui 0,4, genetiškai identiškiems 0,1 (edgeR)
+y$common.dispersion <- 0.1
+
+fit <- glmFit(y, design)
+lrt <- glmLRT(fit, coef = "StatusPOS")
+
+top <- topTags(lrt, n=Inf)
+res <- top$table
+```
+```{r}
+genesFC <- rownames(res)[res$FDR < 0.05]
+logcpm <- cpm(y, log=TRUE)
+
+pc_mat  <- logcpm[genesFC , , drop=FALSE]
+keep_pc <- rowSums(pc_mat > 1) >= 2
+pc_mat <- pc_mat[keep_pc, ]
+
+
+pc_res <- res[rownames(res) %in% rownames(pc_mat), ]
+pc_top <- pc_res[pc_res$FDR < 0.05, ]
+pc_mat_top <- pc_mat[rownames(pc_mat) %in% rownames(pc_top), ]
+```
+# Genai su promotorinėje srityje rastu CCTGCG motyvu{.tabset}
+```{r}
+cd44_genes <- readLines("~/NB_lncRNA/input/cd44_motiff/candidate_genes_ensembl.txt")
+cd44_genes <- sub("\\..*$", "", cd44_genes)
+```
+```{r}
+cd44_mot <- res[rownames(res) %in% cd44_genes,]
+su_cd44 <- pc_top[rownames(pc_top) %in% cd44_genes,]
+
+all_non <- pc_mat_top[!rownames(pc_mat_top) %in% cd44_genes, ]
+mat_cd <- pc_mat_top[rownames(pc_mat_top) %in% cd44_genes, ]
+```
+```{r}
+gene_sets <- list(`Visi genai`= rownames(res), `Genai su motyvu` = cd44_genes)
+ggvenn(gene_sets, fill_color = c("#1F77B4", "#FF7F0E"), stroke_size = 0.5)
+cat("Bendras genų skaičius: ", nrow(res), "\n")
+cat("Su motyvu promotoriuje, prie kurio gali jungtis CD44-ICD: ", length(cd44_genes), "\n")
+```
+```{r}
+cat("Statistiškai reikšmingai pakitusių genų skaičius: ", nrow(pc_mat_top), "\n")
+cat("Statistiškai reikšmingai pakitusių genų su motyvu promotorije skaičius: ", nrow(mat_cd), "\n")
+```
+
+## Bendras mėginių pasižiūrėjimas {.tabset}
+Ar skirtumas tarp NEG ir POS grupių priklauso nuo genų su motyvu
+
+### Koreliacija pagal mėginius
+```{r, fig.height= 10, fig.width = 18}
+rownames(counts_pc) <- sub("\\..*$", "", rownames(counts_pc))
+counts_non <- counts_pc[!rownames(counts_pc) %in% cd44_genes,]
+counts_mot <- counts_pc[rownames(counts_pc) %in% cd44_genes,]
+a <- get_cor(counts_pc, title = "Visi")
+b <-get_cor(counts_non, title = "Be motyvo")
+c <-get_cor(counts_mot, title = "Su motyvu")
+
+a | b| c
+```
+
+### PCA
+```{r, fig.height= 10, fig.width = 18}
+a <- get_pca(pc_mat_top, sampleInfo)+ ggtitle("Visi")
+b <- get_pca(all_non, sampleInfo)+ ggtitle("Be  motyvo")
+c <- get_pca(mat_cd, sampleInfo)+ ggtitle("Su motyvu")
+
+a|b|c
+```
+
+## Statistinis palyginimas genų su cd44 jungimosi motyvu promotorinėje srityje su be motyvo promotorinėje srityje
+
+### Mediana
+```{r}
+motif_POS <- abs(mat_cd[, sampleInfo$Group == "POS"])
+motif_NEG <- abs(mat_cd[, sampleInfo$Group == "NEG"])
+
+cat("Raiškos mediana p < 0,05 genų su motyvo genų teigiamoje grupėje", median(motif_POS, na.rm = TRUE),"\n")
+cat("Raiškos mediana p < 0,05 genų su motyvo genų neigiamoje grupėje grupėje", median(motif_NEG, na.rm = TRUE),"\n")
+```
+```{r}
+all_POS <- abs(all_non[, sampleInfo$Group == "POS"])
+all_NEG <- abs(all_non[, sampleInfo$Group == "NEG"])
+
+cat("Raiškos mediana visų p < 0,05 genų be motyvo genų teigiamoje grupėje", median(all_POS, na.rm = TRUE),"\n")
+cat("Raiškos mediana visų p < 0,05 genų be motyvo genų neigiamoje grupėje", median(all_NEG, na.rm = TRUE),"\n")
+```
+
+Variabilumas raiškos duomenyse tarp grupių matomas iš genų, kuriuose randamas CCTGCG motyvas.
+(Be motyvo genų skirtumas duoda mažesnį varibilumą)
+
+### wilcoxson'o testas
+```{r}
+wilcox_POS <- wilcox.test(motif_POS, all_POS)
+wilcox_NEG <- wilcox.test(motif_NEG, all_NEG)
+wilcox_POS$p.value
+wilcox_NEG$p.value
+```
+
+Genai sumotyvu POS mėginiuose labai aiškiai skiriasi nuo genų be šio motyvo (statistiškai reikšmingai pakitę genai).
+
+Genai su motyvu ir be NEG mėginiuose skiriasi, tačiau šis skirtumas yra mažesnis nei POS mėginiuose.
+
+# Genai iš literatūros
+```{r}
+litera <- readLines("~/NB_lncRNA/input/cd44_motiff/cd44_dbENS.txt")
+litera_sym <- readLines("~/NB_lncRNA/input/cd44_motiff/cd44_db.txt")
+
+print(litera_sym)
+```
+```{r}
+all_non <- pc_mat_top[!rownames(pc_mat_top) %in% litera, ]
+mat_cd <- pc_mat_top[rownames(pc_mat_top) %in% litera, ]
+```
+```{r}
+cat("Bendras genų skaičius: ", nrow(res), "\n")
+cat("Genai, kurių raišką CD44 veikia (kaip TF): ", length(litera), "\n")
+```
+```{r}
+cat("Statistiškai reikšmingai pakitusių genų skaičius: ", nrow(pc_mat_top), "\n")
+cat("Statistiškai reikšmingai pakitusių genų iš literatūros skaičius: ", nrow(mat_cd), "\n")
+```
+
+Statistiškai reikšmingai iš literatūroje paminėtų genų yra HIF2A (EPAS1) ir SOX2

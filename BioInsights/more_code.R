@@ -31,8 +31,39 @@ ggplot(pca_df, aes(x = PC1, y = PC2, color = Group, label = Barcode)) +
          axis.title.x = element_text(size = 16),
          axis.title.y = element_text(size = 16),
          axis.text.x = element_text(size = 16),
-         axis.text.y = element_text(size = 16))+
-        coord_fixed()
+         axis.text.y = element_text(size = 16))
+}
+
+getpca <- function(matrica, info){
+  # matrica <- filtruoti genai (yra pokytis)
+  # info <- SampleInfo, meginiu informacija su tiriama grupe ir meginio pavadinimu
+pca_result <- prcomp(t(matrica))
+pca_df <- as.data.frame(pca_result$x)
+pca_df$Barcode <- rownames(pca_df)
+pca_df <- merge(pca_df, info, by = "Barcode")
+
+var_exp <- pca_result$sdev^2 / sum(pca_result$sdev^2) * 100
+xlab <- paste0("PC1 (", round(var_exp[1], 1), "%)")
+ylab <- paste0("PC2 (", round(var_exp[2], 1), "%)")
+
+ggplot(pca_df, aes(x = PC1, y = PC2, color = Group, label = Barcode)) +
+         geom_point(size = 4) +
+         geom_text_repel(size = 4,
+                         box.padding = 1.0, 
+                         point.padding = 0.8,
+                         max.overlaps = Inf, 
+                         show.legend = FALSE) +
+         theme_minimal() +
+         labs(x = xlab, y = ylab) +
+         scale_color_brewer(palette = "Set1")+
+         theme(legend.position = "bottom",
+         legend.text = element_text(size = 12),
+         legend.title = element_text(size = 14, face = "bold"),
+         plot.title = element_text(size = 18, face = "bold"),
+         axis.title.x = element_text(size = 16),
+         axis.title.y = element_text(size = 16),
+         axis.text.x = element_text(size = 16),
+         axis.text.y = element_text(size = 16))
 }
 
 
@@ -41,6 +72,7 @@ get_cor <- function(x, title= "PCA"){
 cor_mat <- cor(x)
 cor_df <- reshape2::melt(cor_mat)
 colnames(cor_df) <- c("Var1", "Var2", "value")
+
 ggplot(cor_df, aes(x = Var1, y = Var2, fill = value)) +
         geom_tile(color = "white") +
         labs(title="B", fill= " ")+
@@ -184,4 +216,56 @@ TOP_tinklas <- function(x, top_names) {
     scale_edge_color_manual(values = c("lncRNA_corr" = "#ff7f7f", "PPI" = "blue")) +
     scale_shape_manual(values = c("lncRNA" = 17, "protein" = 16)) +
     theme_void()
+}
+
+topVarGenes <- function(vsd, n=500) {
+  mat <- assay(vsd)
+  rv <- apply(mat, 1, var)
+  mat[order(rv, decreasing=TRUE)[1:n], ]    }
+
+get_dist <- function(counts, clone){
+  dist_mat <- as.matrix(dist(t(counts)))
+
+  idx_T <- which(clone=="TC1")
+  idx_K <- which(clone=="K7")
+
+  within_T <- dist_mat[idx_T, idx_T][upper.tri(dist_mat[idx_T, idx_T])]
+  within_K <- dist_mat[idx_K, idx_K][upper.tri(dist_mat[idx_K, idx_K])]
+
+  between <- dist_mat[idx_T, idx_K]
+  
+  mean_within <- mean(c(within_T, within_K))
+  mean_between <- mean(between)
+  
+  ratio <- mean_between / mean_within
+  return(list(ratio=ratio, dist_mat=dist_mat))  }
+
+
+heatmap_ident <- function(mat, genes, gene_set, ann_colors, annotation_col){
+  # mat -> mat_pc
+  # genes -> all_genes
+expr_subset <- mat[rownames(mat) %in% genes, ]
+expr_subset <- expr_subset[apply(expr_subset, 1, function(x) {all(is.finite(x)) && sd(x) != 0}),]
+
+gene_annotation <- stack(gene_set)
+colnames(gene_annotation) <- c("Gene", "Program")
+
+gene_annotation <- gene_annotation[gene_annotation$Gene %in% rownames(expr_subset), ]
+
+gene_annotation <- gene_annotation[!duplicated(gene_annotation$Gene), ]
+rownames(gene_annotation) <- gene_annotation$Gene
+gene_annotation <- gene_annotation["Program"]
+
+expr_subset_ordered <- expr_subset[rownames(gene_annotation), ] 
+
+pheatmap(expr_subset_ordered,
+         scale = "row",
+         show_rownames = FALSE,
+         annotation_col = annotation_col,
+         annotation_colors = ann_colors,
+         annotation_row = gene_annotation,
+         clustering_method = "complete",
+         cluster_cols = TRUE,
+         cluster_rows = FALSE)
+
 }

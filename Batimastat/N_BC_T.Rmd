@@ -10,10 +10,9 @@ source("~/NB_lncRNA/code/BioInsights/more_code.R")
 ```{r}
 tmp <-  readRDS("~/NB_lncRNA/output/code/lncRNA/DataQC/data2DEG.RDS")
 sampleInfo <- tmp[[2]]
-samples2do <- c("K12c1", "K12c2", "K7cN1", "K7cN2")
+samples2do <- c("T1cN1", "T1cN2", "T1N1", "T1N2")
 sampleInfo <- sampleInfo[Barcode %in% samples2do, ] 
-sampleInfo$Group <- sampleInfo$POSNEG
-sampleInfo <- sampleInfo[c(3, 4, 1, 2),]
+sampleInfo$Group <- sampleInfo$Treatment
 ```
 
 ```{r}
@@ -38,7 +37,7 @@ counts_pc <- counts_pc[, samples2do]
 library(edgeR)
 countai <- rbind(counts_lnc, counts_pc)
 
-Status <- factor(sampleInfo$Group, levels = c("NEG", "POS"))
+Status <- factor(sampleInfo$Group, levels = c("Batimastat", "control"))
 y <- DGEList(counts=countai, group=Status)
 y <- calcNormFactors(y)
 design <- model.matrix(~Status)
@@ -47,7 +46,7 @@ design <- model.matrix(~Status)
 y$common.dispersion <- 0.1
 
 fit <- glmFit(y, design)
-lrt <- glmLRT(fit, coef = "StatusPOS")
+lrt <- glmLRT(fit, coef = "Statuscontrol")
 
 top <- topTags(lrt, n=Inf)
 res <- top$table
@@ -89,19 +88,50 @@ get_pca(logcpm_var, sampleInfo)
 ```
 
 ## Heatmap
-Mėginiai atsiskiria pagal labiausiai pakitusių genų raišką (POS NEG)
+Mėginių atsiskirimas pagal labiausiai pakitusių genų raišką.
+Mėginiai aiškia atsiskiria pagal tiriamą skirtumą.
 ```{r}
 annotation_col <- data.frame(Group = sampleInfo$Group)
-ann_colors = list(Group = c(NEG="#54aaaa", POS="#e2a4ad"))
+ann_colors = list(Group = c(Batimastat="#54aaaa", control="#e2a4ad"))
 rownames(annotation_col) <- sampleInfo$Barcode
-pheatmap(logcpm[genesFC,],
-         scale = "row", 
+p1 <- pheatmap(logcpm[rownames(lnc_mat_top),],
+         scale = "row",
          annotation_col = annotation_col,
          annotation_colors = ann_colors,
          show_rownames = FALSE,
-         cluster_rows=TRUE, 
-         cluster_cols=TRUE)
+         cluster_rows = TRUE,
+         main = "lncRNA",
+         silent = TRUE)
+
+p2 <- pheatmap(logcpm[rownames(pc_mat_top),],
+         scale = "row",
+         annotation_col = annotation_col,
+         annotation_colors = ann_colors,
+         show_rownames = FALSE,
+         cluster_rows = TRUE,
+         main= "mRNA",
+         silent = TRUE)
 ```
+```{r, fig.height = 7, fig.width=18}
+matl <- logcpm[rownames(lnc_mat_top), ]
+matp <- logcpm[rownames(pc_mat_top),]
+mat <- rbind(matl, matp)
+p3 <- pheatmap(mat,
+         scale = "row",
+         annotation_col = annotation_col,
+         annotation_colors = ann_colors,
+         show_rownames = FALSE,
+         cluster_rows = TRUE,
+         main= "bendras",
+         silent = TRUE)
+
+g1 <- grid.grabExpr(draw(p1))
+g2 <- grid.grabExpr(draw(p2))
+g3 <- grid.grabExpr(draw(p3))
+
+gridExtra::grid.arrange(g1, g2, g3, ncol = 3)
+```
+
 
 ## Koreliacija
 Teigiami mėginiai labai atsiskiria pagal šį skirtumą
@@ -146,16 +176,7 @@ gridExtra::grid.arrange(g1, g2, ncol = 2)
 ```
 
 
-
 ## Stipriai koreliuojančių su lncRNA mRNA funckinė anotacija
-Stipriai koreliuojančių su lncRNA mRNA funcionalumas:
-
-- Ląstelės membrana (potencialas, pernaša)
-
-- Sąmonė, mokymasis
-
-- Sinapsių veikla
-
 ```{r}
 cor_df_sig <- subset(cor_df, abs(value) > 0.75)
 #sudaro klasterius
