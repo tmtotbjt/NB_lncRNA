@@ -1,8 +1,8 @@
 ```{r}
 library(pacman)
-p_load(rtracklayer, GenomicRanges, dplyr, data.table, DESeq2, ggplot2, ggrepel, tidyr, 
-      readxl, biomaRt, clusterProfiler, org.Hs.eg.db, DT, ChIPseeker, TxDb.Hsapiens.UCSC.hg38.knownGene, 
-      pheatmap, flashClust, ggraph, ComplexHeatmap, gridExtra, grid, tidygraph, edgeR, ggvenn)
+p_load(rtracklayer, dplyr, data.table, DESeq2, ggplot2, ggrepel, tidyr, 
+      readxl, clusterProfiler, pheatmap, flashClust, ggraph, 
+      ComplexHeatmap, gridExtra, grid, tidygraph, edgeR, ggvenn)
 knitr::opts_chunk$set(fig.width=6, fig.height=6, echo = T)
 source("~/NB_lncRNA/code/BioInsights/more_code.R")
 ```
