@@ -71,7 +71,7 @@ mat_cd <- pc_mat_top[rownames(pc_mat_top) %in% cd44_genes, ]
 ```{r}
 gene_sets <- list(`Visi genai`= rownames(res), `Genai su motyvu` = cd44_genes)
 ggvenn(gene_sets, fill_color = c("#1F77B4", "#FF7F0E"), stroke_size = 0.5)
-cat("Bendras genų skaičius: ", nrow(res), "\n")
+cat("Bendras baltymą koduojančių genų skaičius: ", nrow(res), "\n")
 cat("Su motyvu promotoriuje, prie kurio gali jungtis CD44-ICD: ", length(cd44_genes), "\n")
 ```
 ```{r}
@@ -105,17 +105,17 @@ a|b|c
 
 ## Statistinis palyginimas genų su cd44 jungimosi motyvu promotorinėje srityje su be motyvo promotorinėje srityje
 
-### Mediana
+### Genų su motyvo raiška per grupę
 ```{r}
-motif_POS <- abs(mat_cd[, sampleInfo$Group == "POS"])
-motif_NEG <- abs(mat_cd[, sampleInfo$Group == "NEG"])
+motif_POS <- apply(mat_cd[, sampleInfo$Group == "POS"], 1, sd)
+motif_NEG <- apply(mat_cd[, sampleInfo$Group == "NEG"], 1, sd)
 
 cat("Raiškos mediana p < 0,05 genų su motyvo genų teigiamoje grupėje", median(motif_POS, na.rm = TRUE),"\n")
 cat("Raiškos mediana p < 0,05 genų su motyvo genų neigiamoje grupėje grupėje", median(motif_NEG, na.rm = TRUE),"\n")
 ```
 ```{r}
-all_POS <- abs(all_non[, sampleInfo$Group == "POS"])
-all_NEG <- abs(all_non[, sampleInfo$Group == "NEG"])
+all_POS <- apply(all_non[, sampleInfo$Group == "POS"], 1, sd)
+all_NEG <- apply(all_non[, sampleInfo$Group == "NEG"], 1, sd)
 
 cat("Raiškos mediana visų p < 0,05 genų be motyvo genų teigiamoje grupėje", median(all_POS, na.rm = TRUE),"\n")
 cat("Raiškos mediana visų p < 0,05 genų be motyvo genų neigiamoje grupėje", median(all_NEG, na.rm = TRUE),"\n")
@@ -127,8 +127,10 @@ Variabilumas raiškos duomenyse tarp grupių matomas iš genų, kuriuose randama
 ### wilcoxson'o testas
 ```{r}
 wilcox_POS <- wilcox.test(motif_POS, all_POS)
-wilcox_NEG <- wilcox.test(motif_NEG, all_NEG)
 wilcox_POS$p.value
+```
+```{r}
+wilcox_NEG <- wilcox.test(motif_NEG, all_NEG)
 wilcox_NEG$p.value
 ```
 
@@ -148,7 +150,7 @@ all_non <- pc_mat_top[!rownames(pc_mat_top) %in% litera, ]
 mat_cd <- pc_mat_top[rownames(pc_mat_top) %in% litera, ]
 ```
 ```{r}
-cat("Bendras genų skaičius: ", nrow(res), "\n")
+cat("Bendras baltymą koduojančių genų skaičius: ", nrow(res), "\n")
 cat("Genai, kurių raišką CD44 veikia (kaip TF): ", length(litera), "\n")
 ```
 ```{r}

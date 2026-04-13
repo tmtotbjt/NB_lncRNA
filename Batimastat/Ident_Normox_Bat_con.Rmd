@@ -6,16 +6,16 @@ p_load(rtracklayer, GenomicRanges, dplyr, data.table, DESeq2, ggplot2, ggrepel, 
 source("~/NB_lncRNA/code/BioInsights/more_code.R")
 knitr::opts_chunk$set(fig.width=6, fig.height=6, echo = T)
 ```
-
 ```{r}
 tmp <-  readRDS("~/NB_lncRNA/output/code/lncRNA/DataQC/data2DEG.RDS")
 sampleInfo <- tmp[[2]]
-samples2do <- c("T1cH1", "T1cH2", "T1cN1", "T1cN2", "K7cH1", "K7cH2", "K7cN1", "K7cN2")
+samples2do <- c("T1cN1", "T1cN2", "T1N1", "T1N2", "K7N1", "K7N2", "K7cN1", "K7cN2")
 sampleInfo <- sampleInfo[Barcode %in% samples2do, ] 
-sampleInfo$Group <- sampleInfo$Oxygen
+sampleInfo$Group <- sampleInfo$Treatment
 ```
+Hypox Control (Batimastat vs Control Hypox salygomis)
 ```{r}
-DT::datatable(sampleInfo[, .(sample, Clone,  Group)], class = 'cell-border stripe')
+DT::datatable(sampleInfo[, .(sample, Oxygen, Group)], class = 'cell-border stripe')
 ```
 ```{r}
 #Protein coding
@@ -25,16 +25,18 @@ list_of_4 <- duomenys[[1]]
 counts_pc <- list_of_4[[2]]
 counts_pc <- counts_pc[, samples2do]
 
-dds <- readRDS("~/NB_lncRNA/output/code/BioInsights/Oxygen/dds_pc.RDS")
+dds <- readRDS("~/NB_lncRNA/output/code/BioInsights/Bastimat/dds_pc_NBC.RDS")
 vsd_pc <- vst(dds)
 mat_pc <- assay(vsd_pc)
 res_pc <- results(dds) %>% as.data.table(., keep.rownames=TRUE)
 
-sig <- subset(res_pc, padj < 0.05 & abs(log2FoldChange) >= 2)
+sig <- subset(res_pc, padj < 0.05)
 sig <- sig[order(sig$padj), ]
 sig <- as.data.frame(sig)
 mat_filt_pc <- mat_pc[rownames(mat_pc) %in% sig$rn, ]
 rownames(mat_filt_pc) <- sub("\\..*$", "", rownames(mat_filt_pc))
+
+resultsNames(dds)
 ```
 ```{r}
 mes <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets.xlsx", sheet = 1)
@@ -63,7 +65,7 @@ Atliko single-cell, iš kurių gauti marekeriai, neuroblastomos identitetui
  
 ```{r}
 annotation_col <- data.frame(Group = sampleInfo$Group)
-ann_colors = list(Group = c(Hypox="cyan", Normox="lightpink"))
+ann_colors = list(Group = c(Batimastat="cyan", control="lightpink"))
 
 all_genes <- unique(c(mes$gene_id, adrn$gene_id))
 gene_sets <- list(Mesenchymal = mes$gene_id, Adrenergic = adrn$gene_id)
@@ -122,7 +124,7 @@ set.seed(123)
 heatmap_ident(mat_pc, all_genes, gene_sets, ann_colors, annotation_col)
 ```
 
-# Iš single-cell
+# Iš single-cell {.tabset}
 
 ## Gerda Kildisiute et. all 2021
 

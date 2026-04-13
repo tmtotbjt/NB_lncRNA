@@ -137,7 +137,7 @@ ref_meta <- readRDS("~/NB_lncRNA/input/cell_ident/kildMetaData.RDS")
 #all(colnames(ref_counts) == rownames(ref_meta))
 ref_meta$cellType <- ref_meta$Annotation
 
-# This one is already good
+
 ref_meta$sampleID <- rownames(ref_meta)
 
 

@@ -6,7 +6,6 @@ p_load(rtracklayer, GenomicRanges, dplyr, data.table, dplyr, DESeq2, ggplot2, gg
 knitr::opts_chunk$set(fig.width=6, fig.height=6, echo = T)
 source("~/NB_lncRNA/code/BioInsights/more_code.R")
 ```
-
 ```{r}
 tmp <-  readRDS("~/NB_lncRNA/output/code/lncRNA/DataQC/data2DEG.RDS")
 sampleInfo <- tmp[[2]]
@@ -33,7 +32,7 @@ rownames(mat) <- vsd$rn
 
 res <- results(dds) %>% as.data.table(., keep.rownames=TRUE) 
 
-sig_lncRNAs <- subset(res, padj < 0.05 & abs(log2FoldChange) > 1.25)
+sig_lncRNAs <- subset(res, padj < 0.05)
 sig_lncRNAs <- sig_lncRNAs[order(sig_lncRNAs$padj), ]
 sig_lncRNAs <- as.data.frame(sig_lncRNAs)
 #rownames(sig_lncRNAs) <- sub("\\..*$", "", rownames(sig_lncRNAs))
@@ -54,7 +53,7 @@ vsd_pc <- vst(dds)
 mat_pc <- assay(vsd_pc)
 res_pc <- results(dds) %>% as.data.table(., keep.rownames=TRUE)
 
-sig <- subset(res_pc, padj < 0.05 & abs(log2FoldChange) >= 2)
+sig <- subset(res_pc, padj < 0.05)
 sig <- sig[order(sig$padj), ]
 sig <- as.data.frame(sig)
 mat_filt_pc <- mat_pc[rownames(mat_pc) %in% sig$rn, ]
