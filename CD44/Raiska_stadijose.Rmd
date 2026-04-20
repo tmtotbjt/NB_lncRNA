@@ -1,0 +1,65 @@
+Ar *CD44* raiška kaip nors skiriasi tarp stadijų? 
+
+```{r}
+library(pacman)
+p_load(data.table, dplyr, ggplot2, reshape2, factoextra, rtracklayer, tidyverse)
+
+knitr::opts_chunk$set(fig.width=6, fig.height=6, echo = T)
+```
+```{r}
+df_info <- read.delim("~/NB_kursinis/input/GSE49711_series_matrix.txt")
+df <- read.delim("~/NB_kursinis/input/df_filtruotas")
+df_expr <- df %>%
+  dplyr::select(, starts_with('SEQC'))
+
+i <- c(1:498)
+df_expr[, i] <- apply(df_expr[, i], 2, function(x) as.numeric(as.character(x)))
+
+df_expr <- as.matrix(df_expr)
+row.names(df_expr) <- NULL
+rownames(df_expr) <- df$Gene
+
+```
+
+Raiška su [GSE49711](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE49711) duomenimis
+
+```{r}
+expr_boxplot <- melt(as.matrix(df_expr))
+colnames(expr_boxplot) <- c("Gene", "Sample", "Expression")
+expr_boxplot$inss.stage <- df_info$inss.stage[match(expr_boxplot$Sample, df_info$Sample_title)]
+gene <- "CD44"
+expr_boxplot_cd44 <- expr_boxplot[expr_boxplot$Gene %in% gene, ]
+
+ggplot(expr_boxplot_cd44, aes(x = inss.stage, y = Expression, fill = inss.stage)) +
+  geom_violin(outlier.shape = NA, alpha = 0.7) +  
+  geom_jitter(width = 0.2, size = 2, alpha = 0.5) +
+  theme_minimal() +
+  labs(title = bquote(italic(.(gene)) * " geno raiška"),
+       x = "Stadija pagal INSS",
+       y = "Raiškos lygis (log2)",
+       fill = "Stadija") +
+  scale_fill_brewer(palette = "Set2")
+```
+
+Nuėmus logoritmą
+
+```{r}
+df_original <- (2^df_expr) - 1
+
+expr_boxplot <- melt(as.matrix(df_original))
+colnames(expr_boxplot) <- c("Gene", "Sample", "Expression")
+expr_boxplot$inss.stage <- df_info$inss.stage[match(expr_boxplot$Sample, df_info$Sample_title)]
+expr_boxplot_cd44 <- expr_boxplot[expr_boxplot$Gene %in% gene, ]
+
+ggplot(expr_boxplot_cd44, aes(x = inss.stage, y = Expression, fill = inss.stage)) +
+  geom_violin(outlier.shape = NA, alpha = 0.7) +  
+  geom_jitter(width = 0.2, size = 2, alpha = 0.5) +
+  theme_minimal() +
+  labs(title = bquote(italic(.(gene)) * " geno raiška"),
+       x = "Stadija pagal INSS",
+       y = "Raiškos lygis",
+       fill = "Stadija") +
+  scale_fill_brewer(palette = "Set2")
+```
+
+

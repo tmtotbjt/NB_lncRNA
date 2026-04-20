@@ -265,7 +265,63 @@ pheatmap(expr_subset_ordered,
          annotation_colors = ann_colors,
          annotation_row = gene_annotation,
          clustering_method = "complete",
-         cluster_cols = TRUE,
+         cluster_cols = FALSE,
          cluster_rows = FALSE)
+
+}
+
+boxplotinam <- function(genes_for_plot, counts, group, name){
+  # genes_for_plot
+  # group - sampleInfo$Group
+  # name - sample name (Barcode)
+expr <- counts[intersect(genes_for_plot, rownames(counts)), ]
+
+df_long <- as.data.frame(expr)
+df_long$Genas <- rownames(expr)
+
+df_long <- pivot_longer(
+  df_long,
+  cols = -Genas,
+  names_to = "sample",
+  values_to = "Raiska"
+)
+
+df_long$Poveikis <- group[match(df_long$sample, name)]
+
+ggplot(df_long, aes(x = Genas, y = Raiska, fill = Poveikis)) +
+  geom_boxplot(position = position_dodge(width = 0.8)) +
+  geom_jitter(
+    aes(color = Poveikis),
+    position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.8),
+    size = 1.5
+  ) +
+  theme_bw() +
+  theme(
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12),
+    legend.key.size = unit(1, "cm"),
+    axis.title.y = element_text(size = 14),
+    xis.text.y = element_text(size = 14)
+  )
+}
+
+
+
+single_pheatmap <- function(names, counts_names, annotation_col){
+
+common_genes <- intersect(rownames(names), rownames(counts_names))
+
+
+cor_mat <- cor(counts_names[common_genes, ],
+               names[common_genes, ],
+               method = "spearman")
+set.seed(773)
+pheatmap(cor_mat,
+         cluster_rows = TRUE,
+         cluster_cols = TRUE,
+         annotation_row = annotation_col,
+         main = "Ląstelių tipai",
+         display_numbers = FALSE,
+         color = colorRampPalette(c("blue", "white", "red"))(100))
 
 }

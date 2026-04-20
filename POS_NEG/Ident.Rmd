@@ -13,6 +13,9 @@ samples2do <- c("NeNR1", "NeNR2", "T1cN1", "T1cN2","K12c1", "K12c2", "K7cN1", "K
 sampleInfo <- sampleInfo[Barcode %in% samples2do, ] 
 sampleInfo$Group <- sampleInfo$POSNEG
 sampleInfo <- sampleInfo[c(7, 8, 1, 2, 5, 6, 3, 4),]
+
+annotation_col <- data.frame(Group = sampleInfo$Group)
+ann_colors = list(Group = c(NEG="cyan", POS="lightpink"))
 ```
 ```{r}
 DT::datatable(sampleInfo[, .(sample, Clone,  Group)], class = 'cell-border stripe')
@@ -20,7 +23,6 @@ DT::datatable(sampleInfo[, .(sample, Clone,  Group)], class = 'cell-border strip
 ```{r}
 #Protein coding
 duomenys <- readRDS("~/NB_lncRNA/input/data2DEG_protein.RDS")
-
 list_of_4 <- duomenys[[1]]
 counts_pc <- list_of_4[[2]]
 counts_pc <- counts_pc[, samples2do]
@@ -32,25 +34,140 @@ res_pc <- results(dds) %>% as.data.table(., keep.rownames=TRUE)
 
 resultsNames(dds)
 ```
+
+# Iš single-cell {.tabset}
+
+## Gerda Kildisiute et. all 2021
+
 ```{r}
-#daug skirtingu
-mes <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets.xlsx", sheet = 1)
-adrn <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets.xlsx", sheet = 2)
-NCC <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets.xlsx", sheet = 3)
-NonA <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets.xlsx", sheet = 4)
-crmff <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets.xlsx", sheet = 5)
-symblast <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets.xlsx", sheet = 6)
-SCPs <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets.xlsx", sheet = 7)
-OSL <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets.xlsx", sheet = 8)
+avg_expr <- readRDS("~/NB_lncRNA/output/code/sc/avg_expr.RDS")
+single_pheatmap(avg_expr, counts_pc, annotation_col)
 ```
 
-# Markeriai iš straipsnių {.tabset}
+## Dong et. all 2020 {.tabset}
 
-## Kelių straipsnių
+### Ląstelės, kurios gautos iš embriono (4 savaitės po apvaisinimo)
+
+```{r}
+avg_expr <- readRDS("~/NB_lncRNA/output/code/sc/avg_exprDONG.RDS")
+avg_expr <- avg_expr[,-3]
+single_pheatmap(avg_expr, counts_pc, annotation_col)
+```
+
+### F2, F7 - mėginiai 8 savaitės po apvaisinimo
+
+```{r}
+avg_expr <- readRDS("~/NB_lncRNA/output/code/sc/avg_exprDONG_F2_7.RDS")
+counts <- counts_pc
+rownames(counts) <- sub("\\..*$", "", rownames(counts))
+single_pheatmap(avg_expr, counts, annotation_col)
+```
+
+### F106, F107 - mėginiai 14 savaitės po apvaisinimo
+
+```{r}
+avg_expr <- readRDS("~/NB_lncRNA/output/code/sc/avg_exprDONG_F106_107.RDS")
+single_pheatmap(avg_expr, counts, annotation_col)
+```
+
+# Markeriai iš single cell straipsnių {.tabset}
+```{r}
+counts_pc <- readRDS("~/NB_lncRNA/input/counts_pc_symb.RDS")
+counts_pc <- counts_pc[, samples2do]
+map <- readRDS("~/NB_lncRNA/input/map_gene.RDS")
+id_to_symbol <- setNames(map$gene_name, map$gene_id)
+new_names <- id_to_symbol[rownames(mat_pc)]
+new_names[is.na(new_names)] <- rownames(mat_pc)[is.na(new_names)]
+rownames(mat_pc) <- new_names
+```
+
+## Radialinė glija ir jos atšakos {.tabset}
+
+[Radial glia and radial glia-like cells: Their role in neurogenesis and regeneration](https://doi.org/10.3389/fnins.2022.1006037), 
+[A defined roadmap of radial glia and astrocyte differentiation from human pluripotent stem cells](https://doi.org/10.1016/j.stemcr.2023.06.007),
+[Decoding Neuronal Diversification by Multiplexed Single-cell RNA-Seq](https://doi.org/10.1016/j.stemcr.2021.02.006)
+[Distinct Molecular Programs Define Human Radial Glia Subtypes During Human Cortical Development](https://rb.gy/gexrby)
+
+```{r}
+markers <- read_excel("~/NB_lncRNA/input/cell_ident/radial_glia_and_other.xlsx", sheet=1)
+neuronal <- read_excel("~/NB_lncRNA/input/cell_ident/radial_glia_and_other.xlsx", sheet=2)
+```
+
+```{r}
+all_genes <- unique(c(markers$`Radial Glia`, markers$'Muller Glia', markers$`Adult subgranular zone`, markers$`Adult subventricular zone`, markers$Astrocytes, markers$'Pro-neuronal TF', markers$'Gliogenic TF', markers$'Oligodendrocyte Precursor', markers$'postmitotic neurons',
+neuronal$Dopaminenergic, neuronal$Cholinergic, neuronal$GABAergic, neuronal$Glutamatergic, neuronal$'pan-neuronal', neuronal$'Canoonical neuronal subtype', neuronal$'Canonical fibroblast'))
+gene_sets <- list(Radial_Glia = markers$`Radial Glia`, Muller_Glia = markers$'Muller Glia', Adult_subgranular_zone = markers$`Adult subgranular zone`, Adult_subventricular_zone = markers$`Adult subventricular zone`, Astrocutes = markers$Astrocytes, Pro_Neuronal_TF = markers$'Pro-neuronal TF', Gliogenic_TF = markers$'Gliogenic TF', Oligodendrocyte_Precursor = markers$'Oligodendrocyte Precursor', Postmitotic_neurons = markers$'postmitotic neurons',
+Dopaminenergic = neuronal$Dopaminenergic, Cholinergic = neuronal$Cholinergic, GABAergic = neuronal$GABAergic, Glutamatergic = neuronal$Glutamatergic, Pan_neuronal = neuronal$'pan-neuronal', Canoonical_neuronal_subtype =neuronal$'Canoonical neuronal subtype', Canonical_fibroblast = neuronal$'Canonical fibroblast')
+set.seed(123)
+heatmap_ident(mat_pc, all_genes, gene_sets, ann_colors, annotation_col)
+```
+
+### Glija ir specifikacija
+```{r, fig.height=12, fig.width= 18}
+genes_box <- markers$`Radial Glia`
+a <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Radial Glia")
+genes_box <- markers$'Muller Glia'
+b <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Muller Glia")
+genes_box <- markers$`Adult subgranular zone`
+c <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Adult subgranular zone")
+genes_box <- markers$`Adult subventricular zone`
+d <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Adult subventricular zone")
+
+(a | b) / (c | d)
+```
+```{r, fig.height=12, fig.width=20}
+genes_box <- markers$Astrocytes
+a <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Astrocytes")
+genes_box <- markers$`Pro-neuronal TF`
+b <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Pro-neuronal TF")
+genes_box <- markers$`Gliogenic TF`
+c <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Gliogenic TF")
+genes_box <- markers$`Oligodendrocyte Precursor`
+d <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Oligodendrocyte Precursor")
+genes_box <- markers$'postmitotic neurons'
+e <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("postmitotic neurons")
+
+
+(a | b) / (c | d |e)
+```
+
+### Sinapsės ir nervai
+```{r, fig.height=12, fig.width= 18}
+genes_box <- neuronal$Dopaminenergic
+a <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Dopaminenergic")
+genes_box <- neuronal$Cholinergic
+b <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Cholinergic")
+genes_box <- neuronal$GABAergic
+c <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("GABAergic")
+genes_box <- neuronal$Glutamatergic
+d <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Glutamatergic")
+
+(a | b) / (c | d)
+```
+```{r, fig.width=20}
+genes_box <- neuronal$'pan-neuronal'
+a <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("pan-neuronal")
+genes_box <- neuronal$`Canoonical neuronal subtype`
+b <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Canoonical neuronal subtype")
+genes_box <- neuronal$`Canonical fibroblast`
+c <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Canonical fibroblast")
+
+(a | b | c)
+```
+
+
+
+## Kelių straipsnių su MES, ADRN, nervine ketera ir jos diferenciacijos atšakomis {.tabset} 
 [van Groningen](http://dx.doi.org/10.1038/ng.3899), [Jansky 2021](doi.org/10.1038/s41588-021-00806-1), 
 [Dong 2020](https://doi.org/10.1016/j.ccell.2020.08.014), [Kameneva 2021](10.1038/s41588-021-00818-x)
 
 Atliko single-cell, iš kurių gauti marekeriai, neuroblastomos identitetui
+
+```{r}
+#daug skirtingu
+markers <- read_excel("~/NB_lncRNA/input/markers_from_articles.xlsx")
+```
+
 
 ### Ląstelės panašesnė į MES ar ADRN
 
@@ -59,13 +176,37 @@ Atliko single-cell, iš kurių gauti marekeriai, neuroblastomos identitetui
 - ADRN - adrenerginėm ląstelėms būdingi genai (gydimui jautrūs)
  
 ```{r}
-annotation_col <- data.frame(Group = sampleInfo$Group)
-ann_colors = list(Group = c(NEG="cyan", POS="lightpink"))
-
-all_genes <- unique(c(mes$gene_id, adrn$gene_id))
-gene_sets <- list(Mesenchymal = mes$gene_id, Adrenergic = adrn$gene_id)
+all_genes <- unique(c(markers$Mesenchymal, markers$Adrenergic))
+gene_sets <- list(Mesenchymal = markers$Mesenchymal, Adrenergic = markers$Adrenergic)
 set.seed(123)
 heatmap_ident(mat_pc, all_genes, gene_sets, ann_colors, annotation_col)
+```
+```{r}
+gene_sets <- lapply(gene_sets, function(gs) {
+  intersect(gs, rownames(counts_pc))
+})
+
+scores <- sapply(gene_sets, function(gs) {
+  colMeans(counts_pc[gs, , drop = FALSE])
+})
+
+df <- data.frame(
+  sample = rownames(scores),
+  scores,
+  Group = sampleInfo$Group)
+
+df_long <- pivot_longer(
+  df,
+  cols = names(gene_sets),
+  names_to = "gene_set",
+  values_to = "score"
+)
+ggplot(df_long, aes(x = Group, y = score, fill = Group)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.1, size = 2) +
+  facet_wrap(~gene_set) +
+  geom_text_repel(aes(label = sample))
+
 ```
 
 ### Ląstelių diferenciacijos lygmuo
@@ -75,10 +216,27 @@ heatmap_ident(mat_pc, all_genes, gene_sets, ann_colors, annotation_col)
 - iš švano ląstelių atsiranda neuroblastai ir chromafininės ląstelės
 
 ```{r}
-all_genes <- unique(c(NCC$gene_id, NonA$gene_id, crmff$gene_id, symblast$gene_id, SCPs$gene_id))
-gene_sets <- list(Neural_Crest_like = NCC$gene_id, Noradrenergic = NonA$gene_id, Chromaffin = crmff$gene_id, Neuroblasts = symblast$gene_id, Shwann_cells_presucor = SCPs$gene_id)
+all_genes <- unique(c(markers$`Neural Crest Cells-like`, markers$Noradrenergic, markers$`Chromaffin cells`, markers$`Sympathetic Neuroblasts`, markers$'Shwann cells presucors'))
+gene_sets <- list(Neural_Crest_like = markers$`Neural Crest Cells-like`, Noradrenergic = markers$Noradrenergic, Chromaffin = markers$`Chromaffin cells`, Sympathetic_Neuroblasts = markers$`Sympathetic Neuroblasts`, Shwann_cells_presucor = markers$'Shwann cells presucors')
 set.seed(123)
 heatmap_ident(mat_pc, all_genes, gene_sets, ann_colors, annotation_col)
+```
+```{r, fig.width= 18}
+genes_box <- markers$`Neural Crest Cells-like`
+a <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Neural Crest Cells-like")
+genes_box <- markers$Noradrenergic
+b <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Noradrenergic")
+
+a | b
+```
+```{r, fig.height=8, fig.width=27}
+genes_box <- markers$`Chromaffin cells`
+a <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Chromaffin cells")
+genes_box <- markers$`Sympathetic Neuroblasts`
+b <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Sympathetic Neuroblasts")
+genes_box <- markers$`Shwann cells presucors`
+c <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Shwann cells presucors")
+a| b| c
 ```
 
 
@@ -86,26 +244,38 @@ heatmap_ident(mat_pc, all_genes, gene_sets, ann_colors, annotation_col)
 [Tumor to normal single-cell mRNA comparisons reveal a pan-neuroblastoma cancer cell](https://doi.org/10.1126/sciadv.abd3311).
 
 ```{r}
-SCPs <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets_lith.xlsx", sheet = 1)
-Bridge <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets_lith.xlsx", sheet = 2)
-SymChrmff <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets_lith.xlsx", sheet = 3)
-chrmff <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets_lith.xlsx", sheet = 4)
-mes_k <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets_lith.xlsx", sheet = 5)
-endothel <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets_lith.xlsx", sheet = 6)
-erytoblasts <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets_lith.xlsx", sheet = 7)
-cortex <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets_lith.xlsx", sheet = 8)
-leuko <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets_lith.xlsx", sheet = 9)
-some_cells <-read_excel("~/NB_lncRNA/input/cell_ident/gene_sets_lith.xlsx", sheet = 10)
-NB <- read_excel("~/NB_lncRNA/input/cell_ident/gene_sets_lith.xlsx", sheet = 10)
+markers <- read_xlsx("~/NB_lncRNA/input/cell_ident/Neuronal markers.xlsx", sheet = 2)
 ```
 
 ### MES, NB ir other cells
  
 ```{r}
-all_genes <- unique(c(cortex$gene_id, mes_k$gene_id, NB$gene_id, endothel$gene_id, erytoblasts$gene_id, leuko$gene_id, some_cells$gene_id))
-gene_sets <- list(Cortex = cortex$gene_id, Mesenchymal = mes_k$gene_id, Neuroblastoma = NB$gene_id, Endothel = endothel$gene_id, Erytoblasts = erytoblasts$gene_id, Leukocytes = leuko$gene_id, Other = some_cells$gene_id)
+all_genes <- unique(c(markers$Cortex, markers$Mesenchyme, markers$Neuroblastoma, markers$Endothelium, markers$Erythoblasts, markers$Leukocytes, markers$Other))
+gene_sets <- list(Cortex = markers$Cortex, Mesenchymal = markers$Mesenchyme, Neuroblastoma = markers$Neuroblastoma, Endothelium = markers$Endothelium, Erythoblasts = markers$Erythoblasts, Leukocytes = markers$Leukocytes, Other = markers$Other)
 set.seed(123)
 heatmap_ident(mat_pc, all_genes, gene_sets, ann_colors, annotation_col)
+```
+```{r, fig.width= 16}
+genes_box <- markers$Mesenchyme
+a <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Mesenchyme")
+genes_box <- markers$Neuroblastoma
+b <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Neuroblastoma")
+
+a | b
+```
+```{r, fig.height=12,fig.width=23}
+genes_box <- markers$Cortex
+a <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Cortex")
+genes_box <- markers$Endothelium
+b <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Endothelium")
+genes_box <- markers$Erythoblasts
+c <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Erythoblasts")
+genes_box <- markers$Leukocytes
+d <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Leukocytes")
+genes_box <- markers$Other
+e <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Other")
+
+(a | b | c) / (d | e)
 ```
 
 ### Ląstelių diferenciacijos lygmuo
@@ -113,102 +283,20 @@ heatmap_ident(mat_pc, all_genes, gene_sets, ann_colors, annotation_col)
 -  most cancer cells show strong chromaffin cell-like features
 
 ```{r}
-all_genes <- unique(c(SCPs$gene_id, Bridge$gene_id, SymChrmff$gene_id, chrmff$gene_id))
-gene_sets <- list(Schwann_pres = SCPs$gene_id, Bridge = Bridge$gene_id, 'Sympathoblasts/Chromaffin' = SymChrmff$gene_id, Chromaffin = chrmff$gene_id)
+all_genes <- unique(c(markers$SCPs, markers$Bridge, markers$`Sympathoblastic/Chromaffin`, markers$Chromaffin))
+gene_sets <- list(Schwann_pres = markers$SCPs, Bridge = markers$Bridge, 'Sympathoblasts/Chromaffin' = markers$`Sympathoblastic/Chromaffin`, Chromaffin = markers$Chromaffin)
 set.seed(123)
 heatmap_ident(mat_pc, all_genes, gene_sets, ann_colors, annotation_col)
 ```
+```{r, fig.height=12,  fig.width=18}
+genes_box <- markers$SCPs
+a <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("SCPs")
+genes_box <- markers$Bridge
+b <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Bridge")
+genes_box <- markers$`Sympathoblastic/Chromaffin`
+c <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Sympathoblastic/Chromaffin")
+genes_box <- markers$Chromaffin
+d <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Chromaffin")
 
-# Iš single-cell {.tabset}
-
-## Gerda Kildisiute et. all 2021
-
-```{r}
-avg_expr <- readRDS("~/NB_lncRNA/output/code/sc/avg_expr.RDS")
-
-common_genes <- intersect(rownames(avg_expr), rownames(counts_pc))
-
-
-cor_mat <- cor(counts_pc[common_genes, ],
-               avg_expr[common_genes, ],
-               method = "spearman")
-
-set.seed(773)
-pheatmap(cor_mat,
-         cluster_rows = TRUE,
-         cluster_cols = TRUE,
-         annotation_row = annotation_col,
-         main = "Ląstelių tipai",
-         display_numbers = FALSE,
-         color = colorRampPalette(c("blue", "white", "red"))(100))
+(a | b ) / (c | d)
 ```
-
-## Dong et. all 2020
-
-Ląstelės, kurios gautos iš embriono (4 savaitės po apvaisinimo)
-
-```{r}
-avg_expr <- readRDS("~/NB_lncRNA/output/code/sc/avg_exprDONG.RDS")
-
-common_genes <- intersect(rownames(avg_expr), rownames(counts_pc))
-
-cor_mat <- cor(counts_pc[common_genes, ],
-               avg_expr[common_genes, ],
-               method = "spearman")
-
-cor_mat <- cor_mat[,-c(3)]
-
-set.seed(773)
-pheatmap(cor_mat,
-         cluster_rows = TRUE,
-         cluster_cols = TRUE,
-         annotation_row = annotation_col,
-         main = "Ląstelių tipai, embrioniniai",
-         display_numbers = FALSE,
-         color = colorRampPalette(c("blue", "white", "red"))(100))
-```
-
-F2, F7 - mėginiai 8 savaitės po apvaisinimo
-
-```{r}
-avg_expr <- readRDS("~/NB_lncRNA/output/code/sc/avg_exprDONG_F2_7.RDS")
-
-rownames(counts_pc) <- sub("\\..*$", "", rownames(counts_pc))
-common_genes <- intersect(rownames(avg_expr), rownames(counts_pc))
-
-cor_mat <- cor(counts_pc[common_genes, ],
-               avg_expr[common_genes, ],
-               method = "spearman")
-
-set.seed(773)
-pheatmap(cor_mat,
-         cluster_rows = TRUE,
-         cluster_cols = TRUE,
-         annotation_row = annotation_col,
-         main = "Ląstelių tipai, antinksčių (F2, F7)",
-         display_numbers = FALSE,
-         color = colorRampPalette(c("blue", "white", "red"))(100))
-```
-
-F106, F107 - mėginiai 14 savaitės po apvaisinimo
-
-```{r}
-avg_expr <- readRDS("~/NB_lncRNA/output/code/sc/avg_exprDONG_F106_107.RDS")
-
-common_genes <- intersect(rownames(avg_expr), rownames(counts_pc))
-
-cor_mat <- cor(counts_pc[common_genes, ],
-               avg_expr[common_genes, ],
-               method = "spearman")
-
-
-set.seed(773)
-pheatmap(cor_mat,
-         cluster_rows = TRUE,
-         cluster_cols = TRUE,
-         annotation_row = annotation_col,
-         main = "Ląstelių tipai, antinksčių (F106, F107)",
-         display_numbers = FALSE,
-         color = colorRampPalette(c("blue", "white", "red"))(100))
-```
-

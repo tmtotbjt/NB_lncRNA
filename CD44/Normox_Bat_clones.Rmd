@@ -1,0 +1,265 @@
+```{r}
+library(pacman)
+p_load(rtracklayer, GenomicRanges, dplyr, data.table, dplyr, DESeq2, ggplot2, ggrepel, tidyr, 
+      readxl, biomaRt, clusterProfiler, org.Hs.eg.db, DT, ChIPseeker, TxDb.Hsapiens.UCSC.hg38.knownGene, 
+      pheatmap, flashClust, ggraph, ComplexHeatmap, gridExtra, grid, ggvenn)
+knitr::opts_chunk$set(fig.width=6, fig.height=6, echo = T)
+source("~/NB_lncRNA/code/BioInsights/more_code.R")
+```
+```{r}
+tmp <-  readRDS("~/NB_lncRNA/output/code/lncRNA/DataQC/data2DEG.RDS")
+sampleInfo <- tmp[[2]]
+T_clone <- c("T1cN1", "T1cN2", "T1N1", "T1N2")
+K_clone <- c("K7N1", "K7N2", "K7cN1", "K7cN2")
+sampleInfo_T <- sampleInfo[Barcode %in% T_clone, ] 
+sampleInfo_T$Group <- sampleInfo_T$Treatment
+sampleInfo_K <- sampleInfo[Barcode %in% K_clone, ] 
+sampleInfo_K$Group <- sampleInfo_K$Treatment
+```
+```{r}
+#Protein coding
+duomenys <- readRDS("~/NB_lncRNA/input/data2DEG_protein.RDS")
+
+list_of_4 <- duomenys[[1]]
+counts_pc <- list_of_4[[2]]
+counts_pc_T <- counts_pc[, T_clone]
+counts_pc_K <- counts_pc[, K_clone]
+```
+```{r}
+library(edgeR)
+
+rownames(counts_pc_T) <- sub("\\..*$", "", rownames(counts_pc_T))
+Status <- factor(sampleInfo_T$Group, levels = c("Batimastat", "control"))
+y <- DGEList(counts=counts_pc_T, group=Status)
+y <- calcNormFactors(y)
+design <- model.matrix(~Status)
+
+# normalus variabilumas žmogui 0,4, genetiškai identiškiems 0,1 (edgeR)
+y$common.dispersion <- 0.1
+
+fit <- glmFit(y, design)
+lrt <- glmLRT(fit, coef = "Statuscontrol")
+
+top <- topTags(lrt, n=Inf)
+res_T <- top$table
+
+genesFC <- rownames(res_T)[res_T$FDR < 0.05]
+logcpm <- cpm(y, log=TRUE)
+
+pc_mat  <- logcpm[genesFC , , drop=FALSE]
+keep_pc <- rowSums(pc_mat > 1) >= 2
+pc_mat_T <- pc_mat[keep_pc, ]
+
+pc_res <- res_T[rownames(res_T) %in% rownames(pc_mat_T), ]
+pc_top_T <- pc_res[pc_res$FDR < 0.05, ]
+pc_mat_top_T <- pc_mat_T[rownames(pc_mat_T) %in% rownames(pc_top_T), ]
+
+
+
+rownames(counts_pc_K) <- sub("\\..*$", "", rownames(counts_pc_K))
+Status <- factor(sampleInfo_K$Group, levels = c("Batimastat", "control"))
+y <- DGEList(counts=counts_pc_K, group=Status)
+y <- calcNormFactors(y)
+design <- model.matrix(~Status)
+
+# normalus variabilumas žmogui 0,4, genetiškai identiškiems 0,1 (edgeR)
+y$common.dispersion <- 0.1
+
+fit <- glmFit(y, design)
+lrt <- glmLRT(fit, coef = "Statuscontrol")
+
+top <- topTags(lrt, n=Inf)
+res_K <- top$table
+
+genesFC <- rownames(res_K)[res_K$FDR < 0.05]
+logcpm <- cpm(y, log=TRUE)
+
+pc_mat  <- logcpm[genesFC , , drop=FALSE]
+keep_pc <- rowSums(pc_mat > 1) >= 2
+pc_mat_K <- pc_mat[keep_pc, ]
+
+
+pc_res <- res_K[rownames(res_K) %in% rownames(pc_mat_K), ]
+pc_top_K <- pc_res[pc_res$FDR < 0.05, ]
+pc_mat_top_K <- pc_mat_K[rownames(pc_mat_K) %in% rownames(pc_top_K), ]
+```
+
+# CD44 raiška mėginiuose {.tabset}
+
+Pasižiūrėti ar skirtumai dėl *CD44* raiškos pokyčio ir skirtumo, ar dėl Batimastato sąveika su ICD dalele.
+
+## T clone
+```{r}
+mat_boxplot <- reshape2::melt(as.matrix(counts_pc_T))
+colnames(mat_boxplot) <- c("Gene", "Sample", "Expression")
+mat_boxplot$Group <- sampleInfo_T$Group[match(mat_boxplot$Sample, sampleInfo_T$Barcode)]
+mat_boxplot_cd44 <- mat_boxplot[mat_boxplot$Gene %in% "ENSG00000026508", ]
+
+ggplot(mat_boxplot_cd44, aes(x = Group, y = Expression, fill = Group)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.7) +  
+  geom_jitter(width = 0.2, size = 2) +
+  theme_minimal() +
+  labs(title = bquote(italic(.("CD44")) * " geno raiška"),
+       x = "Grupė",
+       y = "Raiškos lygis (log2)",
+       fill = "Stadija") +
+  scale_fill_brewer(palette = "Set2") +
+  geom_text_repel(aes(label = Sample))
+```
+
+## K clone
+```{r}
+mat_boxplot <- reshape2::melt(as.matrix(counts_pc_K))
+colnames(mat_boxplot) <- c("Gene", "Sample", "Expression")
+mat_boxplot$Group <- sampleInfo_K$Group[match(mat_boxplot$Sample, sampleInfo_K$Barcode)]
+mat_boxplot_cd44 <- mat_boxplot[mat_boxplot$Gene %in% "ENSG00000026508", ]
+
+ggplot(mat_boxplot_cd44, aes(x = Group, y = Expression, fill = Group)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.7) +  
+  geom_jitter(width = 0.2, size = 2) +
+  theme_minimal() +
+  labs(title = bquote(italic(.("CD44")) * " geno raiška"),
+       x = "Grupė",
+       y = "Raiškos lygis (log2)",
+       fill = "Stadija") +
+  scale_fill_brewer(palette = "Set2") +
+  geom_text_repel(aes(label = Sample))
+```
+
+# Genai su promotorinėje srityje rastu CCTGCG motyvu {.tabset}
+## Bendra genų apžvalga
+```{r}
+cd44_genes <- readLines("~/NB_lncRNA/input/cd44_motiff/candidate_genes_ensembl.txt")
+cd44_genes <- sub("\\..*$", "", cd44_genes)
+```
+```{r}
+cd44_mot_T <- res_T[rownames(res_T) %in% cd44_genes,]
+su_cd44_T <- pc_top_T[rownames(pc_top_T) %in% cd44_genes,]
+
+all_non_T <- pc_mat_top_T[!rownames(pc_mat_top_T) %in% cd44_genes, ]
+mat_cd_T <- pc_mat_top_T[rownames(pc_mat_top_T) %in% cd44_genes, ]
+
+cd44_mot_K <- res_K[rownames(res_K) %in% cd44_genes,]
+su_cd44_K <- pc_top_K[rownames(pc_top_K) %in% cd44_genes,]
+
+all_non_K <- pc_mat_top_K[!rownames(pc_mat_top_K) %in% cd44_genes, ]
+mat_cd_K <- pc_mat_top_K[rownames(pc_mat_top_K) %in% cd44_genes, ]
+```
+```{r}
+gene_sets_T <- list(`Visi baltymą koduojantys genai`= rownames(res_T), `Genai su motyvu` = cd44_genes)
+ggvenn(gene_sets_T, fill_color = c("#1F77B4", "#FF7F0E"), stroke_size = 0.5)
+cat("Bendras baltymą koduojančių genų skaičius: ", nrow(res_T), "\n")
+cat("Su motyvu promotoriuje, prie kurio gali jungtis CD44-ICD: ", length(cd44_genes), "\n")
+```
+```{r}
+cat("Statistiškai reikšmingai pakitusių genų skaičius T klonuose: ", nrow(pc_mat_top_T), "\n")
+cat("Statistiškai reikšmingai pakitusių genų skaičius K klonuose: ", nrow(pc_mat_top_K), "\n")
+cat("Statistiškai reikšmingai pakitusių genų su motyvu promotorije skaičius T klonuose: ", nrow(mat_cd_T), "\n")
+cat("Statistiškai reikšmingai pakitusių genų su motyvu promotorije skaičius K klonuose: ", nrow(mat_cd_K), "\n")
+```
+
+## Bendras mėginių pasižiūrėjimas {.tabset}
+
+### PCA T
+```{r, fig.height= 10, fig.width = 18}
+a <- get_pca(pc_mat_top_T, sampleInfo_T)+ ggtitle("Visi")
+b <- get_pca(all_non_T, sampleInfo_T)+ ggtitle("Be  motyvo")
+c <- get_pca(mat_cd_T, sampleInfo_T)+ ggtitle("Su motyvu")
+
+a|b|c
+```
+
+### PCA K
+```{r, fig.height= 10, fig.width = 18}
+a <- get_pca(pc_mat_top_K, sampleInfo_K)+ ggtitle("Visi")
+b <- get_pca(all_non_K, sampleInfo_K)+ ggtitle("Be  motyvo")
+c <- get_pca(mat_cd_K, sampleInfo_K)+ ggtitle("Su motyvu")
+
+a|b|c
+```
+
+## Statistinis palyginimas genų su cd44 jungimosi motyvu promotorinėje srityje su be motyvo promotorinėje srityje {.tabset}
+
+### Genų su motyvo raiška per grupę
+
+```{r}
+motif_B_T <- apply(mat_cd_T[, sampleInfo_T$Group == "Batimastat", drop = FALSE], 1, median)
+motif_control_T <- apply(mat_cd_T[, sampleInfo_T$Group == "control"], 1, median)
+all_B_T <- apply(all_non_T[, sampleInfo_T$Group == "Batimastat",drop = FALSE], 1, median)
+all_control_T <- apply(all_non_T[, sampleInfo_T$Group == "control"], 1, median)
+
+cat("Raiškos mediana p < 0,05 genų su motyvu genų grupėje be poveikio T klonuose", median(mat_cd_T[, sampleInfo_T$Group == "Batimastat"], na.rm = TRUE),"\n")
+cat("Raiškos mediana p < 0,05 genų su motyvu genų grupėje be poveikio T klonuose", median(motif_control_T, na.rm = TRUE),"\n")
+cat("Raiškos mediana visų p < 0,05 genų be motyvo genų grupėje be poveikio T klonuose", median(all_B_T, na.rm = TRUE),"\n")
+cat("Raiškos mediana visų p < 0,05 genų be motyvo genų grupėje be poveikio T klonuose", median(all_control_T, na.rm = TRUE),"\n")
+```
+
+Skirtumas tarp motyvą turinčių ne genų stebimas kontrolinėje grupėje
+
+```{r}
+motif_B_K <- apply(mat_cd_K[, sampleInfo_K$Group == "Batimastat"], 1, median)
+motif_control_K <- apply(mat_cd_K[, sampleInfo_K$Group == "control"], 1, median)
+all_B_K <- apply(all_non_K[, sampleInfo_K$Group == "Batimastat"], 1, median)
+all_control_K <- apply(all_non_K[, sampleInfo_K$Group == "control"], 1, median)
+
+cat("Raiškos mediana p < 0,05 genų su motyvu genų grupėje su poveikiu K klonuose", median(motif_B_K, na.rm = TRUE),"\n")
+cat("Raiškos mediana p < 0,05 genų su motyvu genų grupėje be poveikio K klonuose", median(motif_control_K, na.rm = TRUE),"\n")
+cat("Raiškos mediana visų p < 0,05 genų be motyvo genų grupėje su poveikiu K klonuose", median(all_B_K, na.rm = TRUE),"\n")
+cat("Raiškos mediana visų p < 0,05 genų be motyvo genų grupėje be pooveikio K klonuose", median(all_control_K, na.rm = TRUE),"\n")
+```
+
+Skirtumas tarp motyvą turinčių ne genų stebimas paveiktoje grupėje
+
+
+### wilcoxson'o testas
+
+#### T klonai
+```{r}
+wilcox_B_T <- wilcox.test(motif_B_T, all_B_T)
+wilcox_B_T$p.value
+```
+```{r}
+wilcox_con_T <- wilcox.test(motif_control_T, all_control_T)
+wilcox_con_T$p.value
+```
+
+Matomas skirtumas abejose grupėse nėra statistiškai reikšmingas
+
+#### K klonai
+```{r}
+wilcox_B_K <- wilcox.test(motif_B_K, all_B_K)
+wilcox_B_K$p.value
+```
+```{r}
+wilcox_con_K <- wilcox.test(motif_control_K, all_control_K)
+wilcox_con_K$p.value
+```
+
+Matomas skirtumas abejose grupėse nėra statistiškai reikšmingas
+
+# Genai iš literatūros
+```{r}
+litera <- readLines("~/NB_lncRNA/input/cd44_motiff/cd44_dbENS.txt")
+litera_sym <- readLines("~/NB_lncRNA/input/cd44_motiff/cd44_db.txt")
+
+print(litera_sym)
+```
+```{r}
+all_non_T <- pc_mat_top_T[!rownames(pc_mat_top_T) %in% litera, ]
+mat_cd_T <- pc_mat_top_T[rownames(pc_mat_top_T) %in% litera, ]
+all_non_K <- pc_mat_top_K[!rownames(pc_mat_top_K) %in% litera, ]
+mat_cd_K <- pc_mat_top_K[rownames(pc_mat_top_K) %in% litera, ]
+```
+```{r}
+cat("Genai, kurių raišką CD44 veikia (kaip TF): ", length(litera), "\n")
+```
+```{r}
+cat("Statistiškai reikšmingai pakitusių genų skaičius T klonuose: ", nrow(pc_mat_top_T), "\n")
+cat("Statistiškai reikšmingai pakitusių genų iš literatūros skaičius T klonuose: ", nrow(mat_cd_T), "\n")
+```
+T mėginiuose statistiškai reikšmingai pakitę ir literatūroje paminėti genai: ALDOC, PFKFB4, PDK1, MYC
+```{r}
+cat("Statistiškai reikšmingai pakitusių genų skaičius K klonuose: ", nrow(pc_mat_top_K), "\n")
+cat("Statistiškai reikšmingai pakitusių genų iš literatūros skaičius K klonuose: ", nrow(mat_cd_K), "\n")
+```
+K mėginiuose statistiškai reikšmingai pakitę ir literatūroje paminėti genai: ALDOC, PFKFB4

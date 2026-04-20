@@ -42,8 +42,7 @@ lrt <- glmLRT(fit, coef = "StatusPOS")
 
 top <- topTags(lrt, n=Inf)
 res <- top$table
-```
-```{r}
+
 genesFC <- rownames(res)[res$FDR < 0.05]
 logcpm <- cpm(y, log=TRUE)
 
@@ -56,7 +55,30 @@ pc_res <- res[rownames(res) %in% rownames(pc_mat), ]
 pc_top <- pc_res[pc_res$FDR < 0.05, ]
 pc_mat_top <- pc_mat[rownames(pc_mat) %in% rownames(pc_top), ]
 ```
+
+# CD44 raiška mėginiuose
+
+Pasižiūrėti ar skirtumai dėl *CD44* raiškos pokyčio ir skirtumo, ar dėl Batimastato sąveika su ICD dalele.
+```{r}
+mat_boxplot <- reshape2::melt(as.matrix(counts_pc))
+colnames(mat_boxplot) <- c("Gene", "Sample", "Expression")
+mat_boxplot$Group <- sampleInfo$Group[match(mat_boxplot$Sample, sampleInfo$Barcode)]
+mat_boxplot_cd44 <- mat_boxplot[mat_boxplot$Gene %in% "ENSG00000026508", ]
+
+ggplot(mat_boxplot_cd44, aes(x = Group, y = Expression, fill = Group)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.7) +  
+  geom_jitter(width = 0.2, size = 2) +
+  theme_minimal() +
+  labs(title = bquote(italic(.("CD44")) * " geno raiška"),
+       x = "Grupė",
+       y = "Raiškos lygis (log2)",
+       fill = "Stadija") +
+  scale_fill_brewer(palette = "Set2") +
+  geom_text_repel(aes(label = Sample))
+```
+
 # Genai su promotorinėje srityje rastu CCTGCG motyvu{.tabset}
+## Bendra genų apžvalga
 ```{r}
 cd44_genes <- readLines("~/NB_lncRNA/input/cd44_motiff/candidate_genes_ensembl.txt")
 cd44_genes <- sub("\\..*$", "", cd44_genes)
@@ -69,7 +91,7 @@ all_non <- pc_mat_top[!rownames(pc_mat_top) %in% cd44_genes, ]
 mat_cd <- pc_mat_top[rownames(pc_mat_top) %in% cd44_genes, ]
 ```
 ```{r}
-gene_sets <- list(`Visi genai`= rownames(res), `Genai su motyvu` = cd44_genes)
+gene_sets <- list(`Visi baltymą koduojantys genai`= rownames(res), `Genai su motyvu` = cd44_genes)
 ggvenn(gene_sets, fill_color = c("#1F77B4", "#FF7F0E"), stroke_size = 0.5)
 cat("Bendras baltymą koduojančių genų skaičius: ", nrow(res), "\n")
 cat("Su motyvu promotoriuje, prie kurio gali jungtis CD44-ICD: ", length(cd44_genes), "\n")
@@ -103,40 +125,37 @@ c <- get_pca(mat_cd, sampleInfo)+ ggtitle("Su motyvu")
 a|b|c
 ```
 
-## Statistinis palyginimas genų su cd44 jungimosi motyvu promotorinėje srityje su be motyvo promotorinėje srityje
+## Statistinis palyginimas genų su cd44 jungimosi motyvu promotorinėje srityje su be motyvo promotorinėje srityje {.tabset}
 
 ### Genų su motyvo raiška per grupę
 ```{r}
-motif_POS <- apply(mat_cd[, sampleInfo$Group == "POS"], 1, sd)
-motif_NEG <- apply(mat_cd[, sampleInfo$Group == "NEG"], 1, sd)
+motif_POS <- apply(mat_cd[, sampleInfo$Group == "POS"], 1, median)
+motif_NEG <- apply(mat_cd[, sampleInfo$Group == "NEG"], 1, median)
 
 cat("Raiškos mediana p < 0,05 genų su motyvo genų teigiamoje grupėje", median(motif_POS, na.rm = TRUE),"\n")
 cat("Raiškos mediana p < 0,05 genų su motyvo genų neigiamoje grupėje grupėje", median(motif_NEG, na.rm = TRUE),"\n")
 ```
 ```{r}
-all_POS <- apply(all_non[, sampleInfo$Group == "POS"], 1, sd)
-all_NEG <- apply(all_non[, sampleInfo$Group == "NEG"], 1, sd)
+all_POS <- apply(all_non[, sampleInfo$Group == "POS"], 1, median)
+all_NEG <- apply(all_non[, sampleInfo$Group == "NEG"], 1, median)
 
 cat("Raiškos mediana visų p < 0,05 genų be motyvo genų teigiamoje grupėje", median(all_POS, na.rm = TRUE),"\n")
 cat("Raiškos mediana visų p < 0,05 genų be motyvo genų neigiamoje grupėje", median(all_NEG, na.rm = TRUE),"\n")
 ```
 
-Variabilumas raiškos duomenyse tarp grupių matomas iš genų, kuriuose randamas CCTGCG motyvas.
-(Be motyvo genų skirtumas duoda mažesnį varibilumą)
+Stebimi skirtumai genų su ir be motyvų grupėje nėra didelis
 
 ### wilcoxson'o testas
 ```{r}
 wilcox_POS <- wilcox.test(motif_POS, all_POS)
 wilcox_POS$p.value
 ```
+Stebimas skirtumas POS grupėje nėra didelis, bet statistiškai reikšmigas
 ```{r}
 wilcox_NEG <- wilcox.test(motif_NEG, all_NEG)
 wilcox_NEG$p.value
 ```
-
-Genai sumotyvu POS mėginiuose labai aiškiai skiriasi nuo genų be šio motyvo (statistiškai reikšmingai pakitę genai).
-
-Genai su motyvu ir be NEG mėginiuose skiriasi, tačiau šis skirtumas yra mažesnis nei POS mėginiuose.
+Stebimas skirtumas NEG grupėje nėra statistiškai neikšmingas
 
 # Genai iš literatūros
 ```{r}

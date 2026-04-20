@@ -391,7 +391,7 @@ datatable(lnc_stats_clean, options = list(pageLength = 10, scrollX = TRUE))
 
 ## Tinklas
 
-Top lncRNA
+Tinklas su patikimomis lncRNA, kurių raiška koreliuoja su baltymą koduojančiais genais, kurie yra šalia (skiria 50kb).
 ```{r}
 threshold <- quantile(lnc_stats$regulatory_score, 0.75)
 
@@ -400,29 +400,8 @@ top_lnc <- lnc_stats %>%
 
 top_lnc$name
 ```
-
 ```{r, fig.height=10, fig.width=10}
-top_lnc <- head(top_lnc, n=15)
-ids <- V(g)[name %in% top_lnc$name]
-
-neighbors <- unique(unlist(ego(g, order = 1, nodes = ids)))
-
-subgraph <- induced_subgraph(g, neighbors) %>%
-  as_tbl_graph()
-
-protein_threshold <- quantile(
-    subgraph %>% 
-    activate(nodes) %>% 
-    as_tibble() %>% 
-    filter(type == "protein") %>% 
-    pull(degree),
-    0.75 )
-
-subgraph <- subgraph %>%
-  activate(nodes) %>%
-  filter(type == "lncRNA" | degree >= protein_threshold)
-
-tinklas(subgraph)
+TOP_tinklas(tg, top_lnc$name)
 ```
 
 ## lncRNA funkcijos priskyrimas pagal tinklą

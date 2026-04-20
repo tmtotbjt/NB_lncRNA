@@ -44,7 +44,29 @@ rownames(mat_pc) <- sub("\\..*$", "", rownames(mat_pc))
 resultsNames(dds)
 ```
 
+# CD44 raiška mėginiuose
+
+Pasižiūrėti ar skirtumai dėl *CD44* raiškos pokyčio ir skirtumo, ar dėl Batimastato sąveika su ICD dalele.
+```{r}
+mat_boxplot <- reshape2::melt(mat_pc)
+colnames(mat_boxplot) <- c("Gene", "Sample", "Expression")
+mat_boxplot$Group <- sampleInfo$Group[match(mat_boxplot$Sample, sampleInfo$Barcode)]
+mat_boxplot_cd44 <- mat_boxplot[mat_boxplot$Gene %in% "ENSG00000026508", ]
+
+ggplot(mat_boxplot_cd44, aes(x = Group, y = Expression, fill = Group)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.7) +  
+  geom_jitter(width = 0.2, size = 2) +
+  theme_minimal() +
+  labs(title = bquote(italic(.("CD44")) * " geno raiška"),
+       x = "Grupė",
+       y = "Raiškos lygis (log2)",
+       fill = "Stadija") +
+  scale_fill_brewer(palette = "Set2") +
+  geom_text_repel(aes(label = Sample))
+```
+
 # Genai su promotorinėje srityje rastu CCTGCG motyvu {.tabset}
+## Bendra genų apžvalga
 ```{r}
 cd44_genes <- readLines("~/NB_lncRNA/input/cd44_motiff/candidate_genes_ensembl.txt")
 cd44_genes <- sub("\\..*$", "", cd44_genes)
@@ -58,7 +80,7 @@ all_non <- mat_filt_pc[!rownames(mat_filt_pc) %in% cd44_genes, ]
 mat_cd <- mat_pc[rownames(mat_pc) %in% su_cd44$rn, ]
 ```
 ```{r}
-gene_sets <- list(`Visi genai`= res_pc$rn, `Genai su motyvu` = cd44_genes)
+gene_sets <- list(`Visi baltymą koduojantys genai`= res_pc$rn, `Genai su motyvu` = cd44_genes)
 ggvenn(gene_sets, fill_color = c("#1F77B4", "#FF7F0E"), stroke_size = 0.5)
 cat("Bendras baltymą koduojančių genų skaičius: ", nrow(res_pc), "\n")
 cat("Su motyvu promotoriuje, prie kurio gali jungtis CD44-ICD: ", length(cd44_genes), "\n")
@@ -91,36 +113,40 @@ c <- get_pca(mat_cd, sampleInfo)+ ggtitle("Su motyvu")
 a|b|c
 ```
 
-## Statistinis palyginimas genų su cd44 jungimosi motyvu promotorinėje srityje su be motyvo promotorinėje srityje
+## Statistinis palyginimas genų su cd44 jungimosi motyvu promotorinėje srityje su be motyvo promotorinėje srityje {.tabset}
 
 ### Genų su motyvo raiška per grupę
 ```{r}
-motif_B <- apply(mat_cd[, sampleInfo$Group == "Batimastat"], 1, sd)
-motif_control <- apply(mat_cd[, sampleInfo$Group == "control"], 1, sd)
+motif_B <- apply(mat_cd[, sampleInfo$Group == "Batimastat"], 1, median)
+motif_control <- apply(mat_cd[, sampleInfo$Group == "control"], 1, median)
 
 cat("Raiškos mediana p < 0,05 genų su motyvo genų grupėje su poveikiu", median(motif_B, na.rm = TRUE),"\n")
 cat("Raiškos mediana p < 0,05 genų su motyvo genų grupėje be poveikio", median(motif_control, na.rm = TRUE),"\n")
 ```
 ```{r}
-all_B <- apply(all_non[, sampleInfo$Group == "Batimastat"], 1, sd)
-all_control <- apply(all_non[, sampleInfo$Group == "control"], 1, sd)
+all_B <- apply(all_non[, sampleInfo$Group == "Batimastat"], 1, median)
+all_control <- apply(all_non[, sampleInfo$Group == "control"], 1, median)
 
 cat("Raiškos mediana visų p < 0,05 genų be motyvo genų grupėje su poveikiu", median(all_B, na.rm = TRUE),"\n")
 cat("Raiškos mediana visų p < 0,05 genų be motyvo genų grupėje be pooveikio", median(all_control, na.rm = TRUE),"\n")
 ```
 
-Variabilumas raiškos duomenyse tarp grupių matomas iš genų, kuriuose randamas CCTGCG motyvas.
-(Be motyvo genų skirtumas duoda mažesnį varibilumą)
+Skirtumas grupėse tarp genų su ir be motyvo nėra didelis
 
 ### wilcoxson'o testas
 ```{r}
 wilcox_B <- wilcox.test(motif_B, all_B)
 wilcox_B$p.value
 ```
+
+Stebimas skirtumas nėra satistiškai reikmingas grupėje veikta Batimastatu
+
 ```{r}
 wilcox_con <- wilcox.test(motif_control, all_control)
 wilcox_con$p.value
 ```
+
+Stebimas skirtumas nėra satistiškai reikmingas kontrolinėje grupėje
 
 # Genai iš literatūros
 ```{r}
@@ -142,3 +168,4 @@ cat("Statistiškai reikšmingai pakitusių genų skaičius: ", nrow(mat_filt_pc)
 cat("Statistiškai reikšmingai pakitusių genų iš literatūros skaičius: ", nrow(mat_cd), "\n")
 ```
 
+Statistiškai reikšmingai pakitusių iš literatūroje paminėti genai ALDOC, PFKFB4, PDK1

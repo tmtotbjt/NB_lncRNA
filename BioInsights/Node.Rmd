@@ -130,7 +130,7 @@ Sukuriamas grafikas su mazgais (lncRNA/baltymai) ir kraštais (koreliacijos/PPI)
 # Duomenų bazės įkėlimas
 string_db <- STRINGdb$new(version="12.0", 
                           species=9606,
-                          score_threshold=900,
+                          score_threshold=500,
                           input_directory="")
 
 # Mappinimas pagal db
@@ -237,8 +237,8 @@ ggraph(tg, layout = "fr") +
   scale_shape_manual(values = c("lncRNA" = 17, "protein" = 16)) +
   theme_void() +
   ggtitle("Clean LncRNA-PPI Network with Modules and Hubs")
-#saveRDS(g, file = "~/NB_lncRNA/output/code/BioInsights/graph/network_graph_.RDS")
-#saveRDS(tg, file = "~/NB_lncRNA/output/code/BioInsights/graph/tbl_.rds")
+#saveRDS(g, file = "~/NB_lncRNA/output/code/BioInsights/graph/network_graph_PN_padj.RDS")
+#saveRDS(tg, file = "~/NB_lncRNA/output/code/BioInsights/graph/tbl_PN_padj.rds")
 ```
 
 ```{r}
