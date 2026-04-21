@@ -25,6 +25,8 @@ DT::datatable(sampleInfo[, .(sample, Clone,  Group)], class = 'cell-border strip
 duomenys <- readRDS("~/NB_lncRNA/input/data2DEG_protein.RDS")
 
 list_of_4 <- duomenys[[1]]
+ilgis <- list_of_4[[3]]
+ilgis <- ilgis[, samples2do]
 counts_pc <- list_of_4[[2]]
 counts_pc <- counts_pc[, samples2do]
 
@@ -48,10 +50,13 @@ resultsNames(dds)
 
 Pasižiūrėti ar skirtumai dėl *CD44* raiškos pokyčio ir skirtumo, ar dėl Batimastato sąveika su ICD dalele.
 ```{r}
-mat_boxplot <- reshape2::melt(mat_pc)
+rpkmai <- edgeR::rpkm(counts_pc, gene.length=rowMeans(ilgis))
+rpkmai <- log2(rpkmai + 1)
+
+mat_boxplot <- reshape2::melt(as.matrix(rpkmai))
 colnames(mat_boxplot) <- c("Gene", "Sample", "Expression")
 mat_boxplot$Group <- sampleInfo$Group[match(mat_boxplot$Sample, sampleInfo$Barcode)]
-mat_boxplot_cd44 <- mat_boxplot[mat_boxplot$Gene %in% "ENSG00000026508", ]
+mat_boxplot_cd44 <- mat_boxplot[mat_boxplot$Gene %in% "ENSG00000026508.22", ]
 
 ggplot(mat_boxplot_cd44, aes(x = Group, y = Expression, fill = Group)) +
   geom_boxplot(outlier.shape = NA, alpha = 0.7) +  

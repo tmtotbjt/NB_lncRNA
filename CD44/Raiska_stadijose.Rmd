@@ -44,9 +44,9 @@ ggplot(expr_boxplot_cd44, aes(x = inss.stage, y = Expression, fill = inss.stage)
 Nuėmus logoritmą
 
 ```{r}
-df_original <- (2^df_expr) - 1
+df_original <- (2^df_expr)
 
-expr_boxplot <- melt(as.matrix(df_original))
+expr_boxplot <- reshape2::melt(as.matrix(df_original))
 colnames(expr_boxplot) <- c("Gene", "Sample", "Expression")
 expr_boxplot$inss.stage <- df_info$inss.stage[match(expr_boxplot$Sample, df_info$Sample_title)]
 expr_boxplot_cd44 <- expr_boxplot[expr_boxplot$Gene %in% gene, ]

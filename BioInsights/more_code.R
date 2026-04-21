@@ -283,12 +283,12 @@ df_long <- pivot_longer(
   df_long,
   cols = -Genas,
   names_to = "sample",
-  values_to = "Raiska"
+  values_to = "log2_RPKM"
 )
 
 df_long$Poveikis <- group[match(df_long$sample, name)]
 
-ggplot(df_long, aes(x = Genas, y = Raiska, fill = Poveikis)) +
+ggplot(df_long, aes(x = Genas, y = log2_RPKM, fill = Poveikis)) +
   geom_boxplot(position = position_dodge(width = 0.8)) +
   geom_jitter(
     aes(color = Poveikis),

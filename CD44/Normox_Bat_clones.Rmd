@@ -24,9 +24,15 @@ list_of_4 <- duomenys[[1]]
 counts_pc <- list_of_4[[2]]
 counts_pc_T <- counts_pc[, T_clone]
 counts_pc_K <- counts_pc[, K_clone]
+ilgis <- list_of_4[[3]]
+ilgis_T <- ilgis[, T_clone]
+ilgis_K <- ilgis[, K_clone]
 ```
 ```{r}
 library(edgeR)
+
+rpkmai_T <- edgeR::rpkm(counts_pc_T, gene.length=rowMeans(ilgis_T))
+rpkmai_T <- log2(rpkmai_T+1)
 
 rownames(counts_pc_T) <- sub("\\..*$", "", rownames(counts_pc_T))
 Status <- factor(sampleInfo_T$Group, levels = c("Batimastat", "control"))
@@ -55,6 +61,8 @@ pc_top_T <- pc_res[pc_res$FDR < 0.05, ]
 pc_mat_top_T <- pc_mat_T[rownames(pc_mat_T) %in% rownames(pc_top_T), ]
 
 
+rpkmai_K <- edgeR::rpkm(counts_pc_K, gene.length=rowMeans(ilgis_K))
+rpkmai_K <- log2(rpkmai_K+1)
 
 rownames(counts_pc_K) <- sub("\\..*$", "", rownames(counts_pc_K))
 Status <- factor(sampleInfo_K$Group, levels = c("Batimastat", "control"))
@@ -90,10 +98,10 @@ Pasižiūrėti ar skirtumai dėl *CD44* raiškos pokyčio ir skirtumo, ar dėl B
 
 ## T clone
 ```{r}
-mat_boxplot <- reshape2::melt(as.matrix(counts_pc_T))
+mat_boxplot <- reshape2::melt(as.matrix(rpkmai_T))
 colnames(mat_boxplot) <- c("Gene", "Sample", "Expression")
 mat_boxplot$Group <- sampleInfo_T$Group[match(mat_boxplot$Sample, sampleInfo_T$Barcode)]
-mat_boxplot_cd44 <- mat_boxplot[mat_boxplot$Gene %in% "ENSG00000026508", ]
+mat_boxplot_cd44 <- mat_boxplot[mat_boxplot$Gene %in% "ENSG00000026508.22", ]
 
 ggplot(mat_boxplot_cd44, aes(x = Group, y = Expression, fill = Group)) +
   geom_boxplot(outlier.shape = NA, alpha = 0.7) +  
@@ -109,10 +117,10 @@ ggplot(mat_boxplot_cd44, aes(x = Group, y = Expression, fill = Group)) +
 
 ## K clone
 ```{r}
-mat_boxplot <- reshape2::melt(as.matrix(counts_pc_K))
+mat_boxplot <- reshape2::melt(as.matrix(rpkmai_K))
 colnames(mat_boxplot) <- c("Gene", "Sample", "Expression")
 mat_boxplot$Group <- sampleInfo_K$Group[match(mat_boxplot$Sample, sampleInfo_K$Barcode)]
-mat_boxplot_cd44 <- mat_boxplot[mat_boxplot$Gene %in% "ENSG00000026508", ]
+mat_boxplot_cd44 <- mat_boxplot[mat_boxplot$Gene %in% "ENSG00000026508.22", ]
 
 ggplot(mat_boxplot_cd44, aes(x = Group, y = Expression, fill = Group)) +
   geom_boxplot(outlier.shape = NA, alpha = 0.7) +  

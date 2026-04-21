@@ -5,29 +5,7 @@ p_load(rtracklayer, GenomicRanges, dplyr, data.table, dplyr, DESeq2, ggplot2, gg
       pheatmap, flashClust, ggraph, ComplexHeatmap, gridExtra, grid)
 ```
 
-# Mąstom kaip traukti identiškus *modulius*
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-
-# Mąstom kaip anotuoti
+# anotuoti
 
 ## Su moduliais
 ```{r}

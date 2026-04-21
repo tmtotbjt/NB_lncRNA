@@ -47,7 +47,7 @@ resultsNames(dds)
 
 ```{r}
 avg_expr <- readRDS("~/NB_lncRNA/output/code/sc/avg_expr.RDS")
-single_pheatmap(avg_expr, counts_pc, annotation_col)
+single_pheatmap(avg_expr, mat_pc, annotation_col)
 ```
 
 ## Dong et. all 2020 {.tabset}
@@ -57,14 +57,14 @@ single_pheatmap(avg_expr, counts_pc, annotation_col)
 ```{r}
 avg_expr <- readRDS("~/NB_lncRNA/output/code/sc/avg_exprDONG.RDS")
 avg_expr <- avg_expr[,-3]
-single_pheatmap(avg_expr, counts_pc, annotation_col)
+single_pheatmap(avg_expr, mat_pc, annotation_col)
 ```
 
 ### F2, F7 - mėginiai 8 savaitės po apvaisinimo
 
 ```{r}
 avg_expr <- readRDS("~/NB_lncRNA/output/code/sc/avg_exprDONG_F2_7.RDS")
-counts <- counts_pc
+counts <- mat_pc
 rownames(counts) <- sub("\\..*$", "", rownames(counts))
 single_pheatmap(avg_expr, counts, annotation_col)
 ```
@@ -76,16 +76,22 @@ avg_expr <- readRDS("~/NB_lncRNA/output/code/sc/avg_exprDONG_F106_107.RDS")
 single_pheatmap(avg_expr, counts, annotation_col)
 ```
 
-
 # Markeriai iš single cell straipsnių {.tabset}
 ```{r}
-counts_pc <- readRDS("~/NB_lncRNA/input/counts_pc_symb.RDS")
-counts_pc <- counts_pc[, samples2do]
+ilgis <- list_of_4[[3]]
+ilgis <- ilgis[, samples2do]
+rpkmai <- rpkm(dds,  ilgis)
+rpkmai <- log2(rpkmai + 1)
+
 map <- readRDS("~/NB_lncRNA/input/map_gene.RDS")
 id_to_symbol <- setNames(map$gene_name, map$gene_id)
 new_names <- id_to_symbol[rownames(mat_pc)]
 new_names[is.na(new_names)] <- rownames(mat_pc)[is.na(new_names)]
 rownames(mat_pc) <- new_names
+
+new_names <- id_to_symbol[rownames(rpkmai)]
+new_names[is.na(new_names)] <- rownames(rpkmai)[is.na(new_names)]
+rownames(rpkmai) <- new_names
 ```
 
 ## Radialinė glija ir jos atšakos {.tabset}
@@ -112,52 +118,52 @@ heatmap_ident(mat_pc, all_genes, gene_sets, ann_colors, annotation_col)
 ### Glija ir specifikacija
 ```{r, fig.height=12, fig.width= 18}
 genes_box <- markers$`Radial Glia`
-a <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Radial Glia")
+a <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Radial Glia")
 genes_box <- markers$'Muller Glia'
-b <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Muller Glia")
+b <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Muller Glia")
 genes_box <- markers$`Adult subgranular zone`
-c <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Adult subgranular zone")
+c <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Adult subgranular zone")
 genes_box <- markers$`Adult subventricular zone`
-d <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Adult subventricular zone")
+d <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Adult subventricular zone")
 
 (a | b) / (c | d)
 ```
 ```{r, fig.height=12, fig.width=20}
 genes_box <- markers$Astrocytes
-a <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Astrocytes")
+a <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Astrocytes")
 genes_box <- markers$`Pro-neuronal TF`
-b <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Pro-neuronal TF")
+b <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Pro-neuronal TF")
 genes_box <- markers$`Gliogenic TF`
-c <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Gliogenic TF")
+c <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Gliogenic TF")
 genes_box <- markers$`Oligodendrocyte Precursor`
-d <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Oligodendrocyte Precursor")
+d <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Oligodendrocyte Precursor")
 genes_box <- markers$'postmitotic neurons'
-e <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("postmitotic neurons")
+e <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("postmitotic neurons")
 
 
 (a | b) / (c | d |e)
 ```
 
-### Sinapsės ir nervai
+### Neuronų tipai
 ```{r, fig.height=12, fig.width= 18}
 genes_box <- neuronal$Dopaminenergic
-a <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Dopaminenergic")
+a <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Dopaminenergic")
 genes_box <- neuronal$Cholinergic
-b <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Cholinergic")
+b <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Cholinergic")
 genes_box <- neuronal$GABAergic
-c <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("GABAergic")
+c <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("GABAergic")
 genes_box <- neuronal$Glutamatergic
-d <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Glutamatergic")
+d <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Glutamatergic")
 
 (a | b) / (c | d)
 ```
 ```{r, fig.width=20}
 genes_box <- neuronal$'pan-neuronal'
-a <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("pan-neuronal")
+a <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("pan-neuronal")
 genes_box <- neuronal$`Canoonical neuronal subtype`
-b <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Canoonical neuronal subtype")
+b <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Canoonical neuronal subtype")
 genes_box <- neuronal$`Canonical fibroblast`
-c <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Canonical fibroblast")
+c <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Canonical fibroblast")
 
 (a | b | c)
 ```
@@ -168,7 +174,6 @@ c <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + g
 [Dong 2020](https://doi.org/10.1016/j.ccell.2020.08.014), [Kameneva 2021](10.1038/s41588-021-00818-x)
 
 Atliko single-cell, iš kurių gauti marekeriai, neuroblastomos identitetui
-
 
 ```{r}
 #daug skirtingu
@@ -190,11 +195,11 @@ heatmap_ident(mat_pc, all_genes, gene_sets, ann_colors, annotation_col)
 ```
 ```{r}
 gene_sets <- lapply(gene_sets, function(gs) {
-  intersect(gs, rownames(counts_pc))
+  intersect(gs, rownames(rpkmai))
 })
 
 scores <- sapply(gene_sets, function(gs) {
-  colMeans(counts_pc[gs, , drop = FALSE])
+  colMeans(rpkmai[gs, , drop = FALSE])
 })
 
 df <- data.frame(
@@ -230,19 +235,19 @@ heatmap_ident(mat_pc, all_genes, gene_sets, ann_colors, annotation_col)
 ```
 ```{r, fig.width= 18}
 genes_box <- markers$`Neural Crest Cells-like`
-a <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Neural Crest Cells-like")
+a <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Neural Crest Cells-like")
 genes_box <- markers$Noradrenergic
-b <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Noradrenergic")
+b <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Noradrenergic")
 
 a | b
 ```
 ```{r, fig.height=8, fig.width=27}
 genes_box <- markers$`Chromaffin cells`
-a <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Chromaffin cells")
+a <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Chromaffin cells")
 genes_box <- markers$`Sympathetic Neuroblasts`
-b <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Sympathetic Neuroblasts")
+b <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Sympathetic Neuroblasts")
 genes_box <- markers$`Shwann cells presucors`
-c <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Shwann cells presucors")
+c <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Shwann cells presucors")
 a| b| c
 ```
 
@@ -264,23 +269,23 @@ heatmap_ident(mat_pc, all_genes, gene_sets, ann_colors, annotation_col)
 ```
 ```{r, fig.width= 16}
 genes_box <- markers$Mesenchyme
-a <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Mesenchyme")
+a <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Mesenchyme")
 genes_box <- markers$Neuroblastoma
-b <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Neuroblastoma")
+b <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Neuroblastoma")
 
 a | b
 ```
 ```{r, fig.height=12,fig.width=23}
 genes_box <- markers$Cortex
-a <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Cortex")
+a <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Cortex")
 genes_box <- markers$Endothelium
-b <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Endothelium")
+b <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Endothelium")
 genes_box <- markers$Erythoblasts
-c <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Erythoblasts")
+c <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Erythoblasts")
 genes_box <- markers$Leukocytes
-d <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Leukocytes")
+d <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Leukocytes")
 genes_box <- markers$Other
-e <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Other")
+e <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Other")
 
 (a | b | c) / (d | e)
 ```
@@ -297,13 +302,13 @@ heatmap_ident(mat_pc, all_genes, gene_sets, ann_colors, annotation_col)
 ```
 ```{r, fig.height=12,  fig.width=18}
 genes_box <- markers$SCPs
-a <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("SCPs")
+a <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("SCPs")
 genes_box <- markers$Bridge
-b <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Bridge")
+b <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Bridge")
 genes_box <- markers$`Sympathoblastic/Chromaffin`
-c <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Sympathoblastic/Chromaffin")
+c <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Sympathoblastic/Chromaffin")
 genes_box <- markers$Chromaffin
-d <- boxplotinam(genes_box, counts_pc, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Chromaffin")
+d <- boxplotinam(genes_box, rpkmai, sampleInfo$Group, sampleInfo$Barcode) + ggtitle("Chromaffin")
 
 (a | b ) / (c | d)
 ```
