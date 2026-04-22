@@ -9,12 +9,12 @@ source("~/NB_lncRNA/code/BioInsights/more_code.R")
 ```{r}
 tmp <-  readRDS("~/NB_lncRNA/output/code/lncRNA/DataQC/data2DEG.RDS")
 sampleInfo <- tmp[[2]]
-samples2do <- c("T1N1","T1N2","K7N1", "K7N2")
+samples2do <- c("NeNR1", "NeNR2", "K12c1", "K12c2")
 sampleInfo <- sampleInfo[Barcode %in% samples2do, ] 
 sampleInfo$Group <- sampleInfo$Clone
 ```
 ```{r}
-DT::datatable(sampleInfo[, .(sample, Clone, Oxygen, Treatment)], class = 'cell-border stripe')
+DT::datatable(sampleInfo[, .(sample, Clone, Oxygen, Treatment, POSNEG)], class = 'cell-border stripe')
 ```
 ```{r}
 #lncRNA
@@ -59,7 +59,7 @@ a | b
 # Skaitinis palyginimas
 ## Efekto dydžio pasiskirstymas
 ```{r}
-clone <- c("TC1", "TC1", "K7","K7")
+clone <- c("TC1", "TC1", "K12", "K12")
 sep_lnc <- get_dist(log_lnc, clone)
 sep_pc  <- get_dist(log_pc, clone)
 
@@ -72,10 +72,10 @@ Atsiskyrimas tarp klonų pagal mRNA yra stipresnis
 
 ## Mediana
 ```{r}
-logFC_lnc <- rowMeans(log_lnc[, clone=="K7", drop=FALSE]) - 
+logFC_lnc <- rowMeans(log_lnc[, clone=="K12", drop=FALSE]) - 
              rowMeans(log_lnc[, clone=="TC1", drop=FALSE])
 
-logFC_pc  <- rowMeans(log_pc[, clone=="K7", drop=FALSE]) - 
+logFC_pc  <- rowMeans(log_pc[, clone=="K12", drop=FALSE]) - 
              rowMeans(log_pc[, clone=="TC1", drop=FALSE])
 
 cat("Mediana |logFC| (lncRNA):", median(abs(logFC_lnc)), "\n")
