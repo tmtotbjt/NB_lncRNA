@@ -270,7 +270,7 @@ pheatmap(expr_subset_ordered,
 
 }
 
-boxplotinam <- function(genes_for_plot, counts, group, name){
+boxplotinam <- function(genes_for_plot, counts, group, name, clone){
   # genes_for_plot
   # group - sampleInfo$Group
   # name - sample name (Barcode)
@@ -287,24 +287,31 @@ df_long <- pivot_longer(
 )
 
 df_long$Poveikis <- group[match(df_long$sample, name)]
+df_long$Clone <- clone[match(df_long$sample, name)]
 
-ggplot(df_long, aes(x = Genas, y = log2_RPKM, fill = Poveikis)) +
-  geom_boxplot(position = position_dodge(width = 0.8)) +
+ggplot(df_long, aes(x = Poveikis, y = log2_RPKM)) +
+ geom_boxplot(
+    aes(fill = Poveikis),
+    position = position_dodge(width = 0.7),
+    outlier.shape = NA)+
   geom_jitter(
-    aes(color = Poveikis),
-    position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.8),
-    size = 1.5
-  ) +
+    aes(fill = Poveikis, shape = Clone),
+  position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.7),
+  size = 4, color = "black", stroke = 1.2,)+
+  scale_shape_manual(values = c(21, 22, 23, 24, 25)) +
+  facet_wrap(~Genas) +
   theme_bw() +
-  theme(
+  theme(strip.text.x = element_text(face = "italic", size = 16),
+    plot.title = element_text(size=18), 
     legend.title = element_text(size = 14),
     legend.text = element_text(size = 12),
     legend.key.size = unit(1, "cm"),
     axis.title.y = element_text(size = 14),
-    xis.text.y = element_text(size = 14)
+    axis.text.y = element_text(size = 16),
+    axis.title.x = element_text(size = 16),
+    axis.text.x = element_text(size = 16)
   )
 }
-
 
 
 single_pheatmap <- function(names, counts_names, annotation_col){

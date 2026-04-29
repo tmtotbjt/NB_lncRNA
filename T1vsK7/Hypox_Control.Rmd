@@ -41,6 +41,7 @@ b <-get_cor(counts_pc, title = "mRNA")
 
 a | b
 ```
+
 # PCA
 
 Atsiskyrimas tarp klonų didesnis mRNA raiškos duomenyse
@@ -84,7 +85,7 @@ cat("Mediana |logFC| (mRNA):  ", median(abs(logFC_pc)), "\n")
 
 mRNA rodo ryškesnius klonams būdingus raiškos pokyčius.
 
-```{r}
+```{r, eval=F}
 boxplot(abs(logFC_lnc), abs(logFC_pc),
         names=c("lncRNA","mRNA"),
         main="|log2FC| tarp klonų",

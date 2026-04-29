@@ -42,6 +42,7 @@ dds_lnc <- DESeqDataSetFromMatrix(countData = round(counts_lnc),
 vsd_pc <- vst(dds_pc, blind = TRUE)
 vsd_lnc <- vst(dds_lnc, blind = TRUE)
 ```
+
 # PCA
 ```{r}
 pc_pc <- plotPCA(vsd_pc, intgroup=c("Clone","Oxygen","Treatment"), returnData=TRUE)

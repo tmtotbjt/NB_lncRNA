@@ -68,12 +68,16 @@ ggplot(mat_boxplot_cd44, aes(x = Group, y = Expression, fill = Group)) +
        fill = "Stadija") +
   scale_fill_brewer(palette = "Set2") +
   geom_text_repel(aes(label = Sample))
+
 ```
 
 # Genai su promotorinėje srityje rastu CCTGCG motyvu{.tabset}
+
+Paimtas promotoriaus regionas po 500 down- ir up- stream
+
 ## Bendra genų apžvalga
 ```{r}
-cd44_genes <- readLines("~/NB_lncRNA/input/cd44_motiff/candidate_genes_ensembl.txt")
+cd44_genes <- readLines("~/NB_lncRNA/input/cd44_motiff/candidate_genes_ensembl_d500.txt")
 cd44_genes <- sub("\\..*$", "", cd44_genes)
 ```
 ```{r}
@@ -85,14 +89,28 @@ all_non <- mat_filt_pc[!rownames(mat_filt_pc) %in% cd44_genes, ]
 mat_cd <- mat_pc[rownames(mat_pc) %in% su_cd44$rn, ]
 ```
 ```{r}
-gene_sets <- list(`Visi baltymą koduojantys genai`= res_pc$rn, `Genai su motyvu` = cd44_genes)
+gene_sets <- list(`Visi baltymą \nkoduojantys genai`= res_pc$rn, `Genai su motyvu` = cd44_genes)
 ggvenn(gene_sets, fill_color = c("#1F77B4", "#FF7F0E"), stroke_size = 0.5)
 cat("Bendras baltymą koduojančių genų skaičius: ", nrow(res_pc), "\n")
 cat("Su motyvu promotoriuje, prie kurio gali jungtis CD44-ICD: ", length(cd44_genes), "\n")
+cat("Su motyvu koduojantys baltymą:", nrow(cd44_mot), "\n")
 ```
 ```{r}
 cat("Statistiškai reikšmingai pakitusių genų skaičius: ", nrow(mat_filt_pc), "\n")
 cat("Statistiškai reikšmingai pakitusių genų su motyvu promotorije skaičius: ", nrow(mat_cd), "\n")
+```
+
+```{r}
+total <- nrow(res_pc)
+motif <- nrow(cd44_mot)
+signif <- nrow(mat_filt_pc)
+signif_motif <- nrow(mat_cd)
+
+mat_fish <- matrix(c(signif_motif, signif - signif_motif, motif - signif_motif, total - motif - (signif - signif_motif)), nrow = 2, byrow = TRUE)
+colnames(mat_fish) <- c("Motif", "No_motif")
+rownames(mat_fish) <- c("Sig", "Not_sig")
+
+fisher.test(mat_fish)
 ```
 
 ## Bendras mėginių pasižiūrėjimas {.tabset}
@@ -100,12 +118,12 @@ Ar skirtumas tarp NEG ir POS grupių priklauso nuo genų su motyvu
 
 ### Koreliacija pagal mėginius
 ```{r, fig.height= 10, fig.width = 18}
-rownames(counts_pc) <- sub("\\..*$", "", rownames(counts_pc))
-counts_non <- counts_pc[!rownames(counts_pc) %in% cd44_genes,]
-counts_mot <- counts_pc[rownames(counts_pc) %in% cd44_genes,]
-a <- get_cor(counts_pc, title = "Visi")
-b <-get_cor(counts_non, title = "Be motyvo")
-c <-get_cor(counts_mot, title = "Su motyvu")
+mat_visi <- mat_filt_pc[, c(1, 2, 5, 6, 3, 4, 7, 8)]
+mat_be_mot <- all_non[, c(1, 2, 5, 6, 3, 4, 7, 8)]
+mat_su_mot <- mat_cd[, c(1, 2, 5, 6, 3, 4, 7, 8)]
+a <- get_cor(mat_visi, sampleInfo)+ ggtitle("Visi")
+b <- get_cor(mat_be_mot, sampleInfo)+ ggtitle("Be  motyvo")
+c <- get_cor(mat_su_mot, sampleInfo)+ ggtitle("Su motyvu")
 
 a | b| c
 ```
@@ -143,13 +161,15 @@ Skirtumas NEG grupėje tarp genų su motyvu ir be nėra didelis.
 
 
 ### wilcoxson'o testas
+
+Ar stebimas skirtumas grupėje (yra/nėra poveikio) tarp motyvą turinčių ir ne genų yra reikšmingas.
 ```{r}
 wilcox_POS <- wilcox.test(motif_POS, all_POS)
-wilcox_POS$p.value
+cat("p.value stebimo skirtirtumo POS grupėje: ", wilcox_POS$p.value, "\n")
 ```
 ```{r}
 wilcox_NEG <- wilcox.test(motif_NEG, all_NEG)
-wilcox_NEG$p.value
+cat("p.value stebimo skirtirtumo NEG grupėje: ", wilcox_NEG$p.value, "\n")
 ```
 
 Matomas nedidelis raiškos skirtumas statistiškai reikšmingas abejose grupėse
@@ -162,8 +182,7 @@ litera_sym <- readLines("~/NB_lncRNA/input/cd44_motiff/cd44_db.txt")
 print(litera_sym)
 ```
 ```{r}
-all_non <- mat_filt_pc[!rownames(mat_filt_pc) %in% litera, ]
-mat_cd <- mat_filt_pc[rownames(mat_filt_pc) %in% litera, ]
+mat_litera <- mat_filt_pc[rownames(mat_filt_pc) %in% litera, ]
 ```
 ```{r}
 cat("Bendras baltymą koduojančių genų skaičius: ", nrow(res_pc), "\n")
@@ -171,7 +190,68 @@ cat("Genai, kurių raišką CD44 veikia (kaip TF): ", length(litera), "\n")
 ```
 ```{r}
 cat("Statistiškai reikšmingai pakitusių genų skaičius: ", nrow(mat_filt_pc), "\n")
-cat("Statistiškai reikšmingai pakitusių genų iš literatūros skaičius: ", nrow(mat_cd), "\n")
+cat("Statistiškai reikšmingai pakitusių genų iš literatūros skaičius: ", nrow(mat_litera), "\n")
 ```
 
 Statistiškai reikšmingai iš literatūroje paminėtų genų yra HIF2A (EPAS1) ir SOX2
+
+# Glikolizės genai
+
+```{r}
+glic_genes <- readRDS("~/NB_lncRNA/input/Hallmark_glycolysis.RDS")
+
+cd44_glic <- glic_genes[glic_genes$ENSEMBL %in% cd44_genes,]
+
+cat("Viso glikolizės genų (MSigDB):", nrow(glic_genes), "\n")
+cat("Glikolizės genai su CCTGCG motyvu:", nrow(cd44_glic), "\n")
+
+cat("Statistiškai reikmingai pakito:", nrow(sig), "\n")
+sig_glic <- sig[sig$rn %in% glic_genes$ENSEMBL,]
+cat("Iš jų glikolozės genų:", nrow(sig_glic), "\n")
+sig_glic <- sig[sig$rn %in% cd44_glic$ENSEMBL,]
+cat("Iš jų glikolozės genų su motyvu:", nrow(sig_glic), "\n")
+```
+
+```{r}
+mat_glic <- mat_pc[rownames(mat_pc) %in% glic_genes$ENSEMBL,]
+annotation_col <- data.frame(Group = sampleInfo$Group)
+ann_colors = list(Group = c(NEG="cyan", POS="lightpink"))
+mat_glic_h <- mat_glic[apply(mat_glic, 1, sd) != 0, ]
+pheatmap(mat_glic_h,
+           scale = "row",
+           annotation_col = annotation_col, annotation_colors = ann_colors,
+           show_rownames = FALSE, cluster_rows = TRUE, cluster_cols = TRUE,
+           main = "Glikolizės genai")
+```
+```{r}
+glic_long <- mat_glic %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("gene") %>%
+  pivot_longer(
+    cols = -gene,
+    names_to = "sample",
+    values_to = "expression")
+
+glic_long <- glic_long %>%
+  left_join(sampleInfo, by = c("sample" = "Barcode"))
+
+
+glic_sample_avg <- glic_long %>%
+  group_by(sample, Group) %>%
+  summarise(mean_expr = mean(expression, na.rm = TRUE), .groups = "drop")
+
+ggplot(glic_long, aes(x = Group, y = expression, fill = Group)) +
+  geom_violin(trim = TRUE, alpha = 0.6) +
+  geom_boxplot(width = 0.1, outlier.shape = NA) +
+  geom_jitter(width = 0.2, size = 0.4, alpha = 0.3)+
+  theme_bw() +
+  labs(title = "Glikolizės genų raiška tarp grupių", x = "Group", y = "Expression")
+
+ggplot(glic_sample_avg, aes(x = Group, y = mean_expr, fill = Group)) +
+  geom_boxplot() +
+  geom_jitter(width = 0.2) +
+  geom_text_repel(aes(label = sampleInfo$Barcode), size = 4, show.legend = FALSE) +
+  theme_bw() +
+  labs(title = "Vidutinė raiška glikolizės genų per mėginį", y = "Vidutinė raiška")
+
+```

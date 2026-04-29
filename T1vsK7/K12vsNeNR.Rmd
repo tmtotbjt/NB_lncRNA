@@ -41,6 +41,8 @@ b <-get_cor(counts_pc, title = "mRNA")
 
 a | b
 ```
+
+
 # PCA
 
 Atsiskyrimas tarp klonų didesnis mRNA raiškos duomenyse
@@ -59,6 +61,23 @@ a | b
 # Skaitinis palyginimas
 ## Efekto dydžio pasiskirstymas
 ```{r}
+get_dist <- function(counts, clone){
+  dist_mat <- as.matrix(dist(t(counts)))
+
+  idx_T <- which(clone=="TC1")
+  idx_K <- which(clone=="K12")
+
+  within_T <- dist_mat[idx_T, idx_T][upper.tri(dist_mat[idx_T, idx_T])]
+  within_K <- dist_mat[idx_K, idx_K][upper.tri(dist_mat[idx_K, idx_K])]
+
+  between <- dist_mat[idx_T, idx_K]
+  
+  mean_within <- mean(c(within_T, within_K))
+  mean_between <- mean(between)
+  
+  ratio <- mean_between / mean_within
+  return(list(ratio=ratio, dist_mat=dist_mat))  }
+
 clone <- c("TC1", "TC1", "K12", "K12")
 sep_lnc <- get_dist(log_lnc, clone)
 sep_pc  <- get_dist(log_pc, clone)
@@ -84,7 +103,7 @@ cat("Mediana |logFC| (mRNA):  ", median(abs(logFC_pc)), "\n")
 
 mRNA rodo ryškesnius klonams būdingus raiškos pokyčius.
 
-```{r}
+```{r, eval=F}
 boxplot(abs(logFC_lnc), abs(logFC_pc),
         names=c("lncRNA","mRNA"),
         main="|log2FC| tarp klonų",

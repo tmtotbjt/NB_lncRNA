@@ -46,11 +46,9 @@ lrt <- glmLRT(fit, coef = "StatusPOS")
 top <- topTags(lrt, n=Inf)
 res <- top$table
 genesFC <- rownames(res)[res$FDR < 0.05]
-logcpm <- cpm(y, log=TRUE)
+logcpm <- cpm(y, log=TRUE, prior.count = 1)
 
 pc_mat  <- logcpm[genesFC , , drop=FALSE]
-keep_pc <- rowSums(pc_mat > 1) >= 2
-pc_mat <- pc_mat[keep_pc, ]
 
 
 pc_res <- res[rownames(res) %in% rownames(pc_mat), ]
@@ -83,9 +81,12 @@ ggplot(mat_boxplot_cd44, aes(x = Group, y = Expression, fill = Group)) +
 ```
 
 # Genai su promotorinėje srityje rastu CCTGCG motyvu{.tabset}
+
+Paimtas promotoriaus regionas po 500 down- ir up- stream
+
 ## Bendra genų apžvalga
 ```{r}
-cd44_genes <- readLines("~/NB_lncRNA/input/cd44_motiff/candidate_genes_ensembl.txt")
+cd44_genes <- readLines("~/NB_lncRNA/input/cd44_motiff/candidate_genes_ensembl_d500.txt")
 cd44_genes <- sub("\\..*$", "", cd44_genes)
 ```
 ```{r}
@@ -96,27 +97,40 @@ all_non <- pc_mat_top[!rownames(pc_mat_top) %in% cd44_genes, ]
 mat_cd <- pc_mat_top[rownames(pc_mat_top) %in% cd44_genes, ]
 ```
 ```{r}
-gene_sets <- list(`Visi baltymą koduojantys genai`= rownames(res), `Genai su motyvu` = cd44_genes)
+gene_sets <- list(`Visi baltymą \nkoduojantys genai`= rownames(res), `Genai su motyvu` = cd44_genes)
 ggvenn(gene_sets, fill_color = c("#1F77B4", "#FF7F0E"), stroke_size = 0.5)
 cat("Bendras baltymą koduojančių genų skaičius: ", nrow(res), "\n")
 cat("Su motyvu promotoriuje, prie kurio gali jungtis CD44-ICD: ", length(cd44_genes), "\n")
+cat("Su motyvu koduojantys baltymą:", nrow(cd44_mot), "\n")
 ```
 ```{r}
 cat("Statistiškai reikšmingai pakitusių genų skaičius: ", nrow(pc_mat_top), "\n")
-cat("Statistiškai reikšmingai pakitusių genų su motyvu promotorije skaičius: ", nrow(mat_cd), "\n")
+cat("Statistiškai reikšmingai pakitusių genų su motyvu promotoriuje skaičius: ", nrow(mat_cd), "\n")
 ```
+```{r}
+total <- nrow(res)
+motif <- nrow(cd44_mot)
+signif <- nrow(pc_mat_top)
+signif_motif <- nrow(mat_cd)
+
+mat_fish <- matrix(c(signif_motif, signif - signif_motif, motif - signif_motif, total - motif - (signif - signif_motif)), nrow = 2, byrow = TRUE)
+
+colnames(mat_fish) <- c("Motif", "No_motif")
+rownames(mat_fish) <- c("Sig", "Not_sig")
+
+fisher.test(mat_fish)
+```
+
 
 ## Bendras mėginių pasižiūrėjimas {.tabset}
 Ar skirtumas tarp NEG ir POS grupių priklauso nuo genų su motyvu
 
 ### Koreliacija pagal mėginius
 ```{r, fig.height= 10, fig.width = 18}
-rownames(counts_pc) <- sub("\\..*$", "", rownames(counts_pc))
-counts_non <- counts_pc[!rownames(counts_pc) %in% cd44_genes,]
-counts_mot <- counts_pc[rownames(counts_pc) %in% cd44_genes,]
-a <- get_cor(counts_pc, title = "Visi")
-b <-get_cor(counts_non, title = "Be motyvo")
-c <-get_cor(counts_mot, title = "Su motyvu")
+a <- get_cor(pc_mat_top, title = "Visi")
+b <-get_cor(all_non, title = "Be motyvo")
+c <-get_cor(mat_cd, title = "Su motyvu")
+
 
 a | b| c
 ```
@@ -148,23 +162,23 @@ cat("Raiškos mediana visų p < 0,05 genų be motyvo genų teigiamoje grupėje",
 cat("Raiškos mediana visų p < 0,05 genų be motyvo genų neigiamoje grupėje", median(all_NEG, na.rm = TRUE),"\n")
 ```
 
-Stebimas skirtumas tarp genų su motyvu ir be yra didesnis POS grupėje
-
 
 ### wilcoxson'o testas
+
+Ar stebimas skirtumas grupėje (yra/nėra poveikio) tarp motyvą turinčių ir ne genų yra reikšmingas.
 ```{r}
 wilcox_POS <- wilcox.test(motif_POS, all_POS)
-wilcox_POS$p.value
+cat("p.value stebimo skirtirtumo POS grupėje: ", wilcox_POS$p.value, "\n")
 ```
 
 Stebimas skirtumas POS grupėje yra statistiškai reikšmingas
 
 ```{r}
 wilcox_NEG <- wilcox.test(motif_NEG, all_NEG)
-wilcox_NEG$p.value
+cat("p.value stebimo skirtirtumo NEG grupėje: ", wilcox_NEG$p.value, "\n")
 ```
 
-Stebimas skirtumas NEG grupėje nėra statistiškai reikšmingas
+Stebimas skirtumas NEG grupėje yra statistiškai reikšmingas
 
 
 # Genai iš literatūros
@@ -175,8 +189,7 @@ litera_sym <- readLines("~/NB_lncRNA/input/cd44_motiff/cd44_db.txt")
 print(litera_sym)
 ```
 ```{r}
-all_non <- pc_mat_top[!rownames(pc_mat_top) %in% litera, ]
-mat_cd <- pc_mat_top[rownames(pc_mat_top) %in% litera, ]
+mat_litera <- pc_mat_top[rownames(pc_mat_top) %in% litera, ]
 ```
 ```{r}
 cat("Bendras baltymą koduojančių genų skaičius: ", nrow(res), "\n")
@@ -184,7 +197,24 @@ cat("Genai, kurių raišką CD44 veikia (kaip TF): ", length(litera), "\n")
 ```
 ```{r}
 cat("Statistiškai reikšmingai pakitusių genų skaičius: ", nrow(pc_mat_top), "\n")
-cat("Statistiškai reikšmingai pakitusių genų iš literatūros skaičius: ", nrow(mat_cd), "\n")
+cat("Statistiškai reikšmingai pakitusių genų iš literatūros skaičius: ", nrow(mat_litera), "\n")
 ```
 
 Statistiškai reikšmingai iš literatūroje paminėtų genų yra HIF2A (EPAS1) ir SOX2
+
+# Glikolizės genai
+
+```{r}
+glic_genes <- readRDS("~/NB_lncRNA/input/Hallmark_glycolysis.RDS")
+
+cd44_glic <- glic_genes[glic_genes$ENSEMBL %in% cd44_genes,]
+
+cat("Viso glikolizės genų (MSigDB):", nrow(glic_genes), "\n")
+cat("Glikolizės genai su CCTGCG motyvu:", nrow(cd44_glic), "\n")
+
+cat("Statistiškai reikmingai pakito:", nrow(pc_top), "\n")
+sig_glic <- pc_top[rownames(pc_top) %in% glic_genes$ENSEMBL,]
+cat("Iš jų glikolozės genų:", nrow(sig_glic), "\n")
+sig_glic <- pc_top[rownames(pc_top) %in% cd44_glic$ENSEMBL,]
+cat("Iš jų glikolozės genų su motyvu:", nrow(sig_glic), "\n")
+```

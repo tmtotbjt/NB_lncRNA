@@ -1,8 +1,6 @@
-Ar *CD44* raiška kaip nors skiriasi tarp stadijų? 
-
 ```{r}
 library(pacman)
-p_load(data.table, dplyr, ggplot2, reshape2, factoextra, rtracklayer, tidyverse)
+p_load(data.table, dplyr, ggplot2, reshape2, factoextra, rtracklayer, tidyverse, readxl, patchwork)
 
 knitr::opts_chunk$set(fig.width=6, fig.height=6, echo = T)
 ```
@@ -18,10 +16,16 @@ df_expr[, i] <- apply(df_expr[, i], 2, function(x) as.numeric(as.character(x)))
 df_expr <- as.matrix(df_expr)
 row.names(df_expr) <- NULL
 rownames(df_expr) <- df$Gene
-
 ```
 
 Raiška su [GSE49711](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE49711) duomenimis
+
+Mėginių kiekvienoje stadijoje
+```{r}
+table(df_info$inss.stage)
+```
+
+# Ar *CD44* raiška kaip nors skiriasi tarp stadijų? 
 
 ```{r}
 expr_boxplot <- melt(as.matrix(df_expr))
@@ -61,5 +65,201 @@ ggplot(expr_boxplot_cd44, aes(x = inss.stage, y = Expression, fill = inss.stage)
        fill = "Stadija") +
   scale_fill_brewer(palette = "Set2")
 ```
+
+# Markerinių genų raiška 4 ir 4S stadijose {.tabset}
+```{r}
+df_info_4 <- df_info %>% filter(grepl("4", inss.stage))
+df_expr_4 <- df_expr[, colnames(df_expr) %in% df_info_4$Sample_title]
+
+expr_boxplot <- reshape2::melt(as.matrix(df_expr_4))
+colnames(expr_boxplot) <- c("Gene", "Sample", "Expression")
+expr_boxplot$inss.stage <- df_info$inss.stage[match(expr_boxplot$Sample, df_info$Sample_title)]
+```
+```{r}
+#Violin plot stadijoms
+violinas <- function(x, expr_boxplot) {
+    # x <- markerkiniai genai
+    # expr_boxplot <- matrica(expr)
+genes_box <- x
+expr_boxplot_pol <- expr_boxplot[expr_boxplot$Gene %in% genes_box, ]
+ggplot(expr_boxplot_pol, aes(x = inss.stage, y = Expression, fill = factor(inss.stage))) +
+  geom_violin() +
+  geom_jitter(width = 0.1, size = 1, alpha = 0.5) +
+  facet_wrap(~Gene) +
+  theme(strip.text.x = element_text(face = "italic"), 
+    axis.title.y = element_text(size = 14),
+    axis.text.y = element_text(size = 16),
+    axis.text.x = element_text(size = 14),
+    axis.title.x = element_text(size = 16)) +
+  labs(x = "Stadija pagal INSS", y = "Raiškos lygis", fill = "Stadija") +
+  scale_fill_brewer(palette = "Set2")
+}
+```
+
+## Radialinė glija ir jos atšakos {.tabset}
+
+[Radial glia and radial glia-like cells: Their role in neurogenesis and regeneration](https://doi.org/10.3389/fnins.2022.1006037), 
+[A defined roadmap of radial glia and astrocyte differentiation from human pluripotent stem cells](https://doi.org/10.1016/j.stemcr.2023.06.007),
+[Decoding Neuronal Diversification by Multiplexed Single-cell RNA-Seq](https://doi.org/10.1016/j.stemcr.2021.02.006)
+[Distinct Molecular Programs Define Human Radial Glia Subtypes During Human Cortical Development](https://rb.gy/gexrby)
+
+```{r}
+markers <- read_excel("~/NB_lncRNA/input/cell_ident/radial_glia_and_other.xlsx", sheet=1)
+neuronal <- read_excel("~/NB_lncRNA/input/cell_ident/radial_glia_and_other.xlsx", sheet=2)
+```
+
+### Glija ir specifikacija
+```{r, fig.height=12, fig.width= 18}
+a <- violinas(markers$'Radial Glia', expr_boxplot) + ggtitle("Radial Glia")
+b <- violinas(markers$'Muller Glia', expr_boxplot) + ggtitle("Muller Glia")
+c <- violinas(markers$'Adult subgranular zone', expr_boxplot) + ggtitle("Adult subgranular zone")
+d <- violinas(markers$'Adult subventricular zone', expr_boxplot) + ggtitle("Adult subventricular zone")
+
+(a | b) 
+```
+```{r, fig.height=10, fig.width= 18}
+(c | d)
+```
+```{r, fig.height=10, fig.width=20}
+a <- violinas(markers$Astrocytes, expr_boxplot) + ggtitle("Astrocytes")
+b <- violinas(markers$'Pro-neuronal TF', expr_boxplot) + ggtitle("Pro-neuronal TF")
+c <- violinas(markers$'Gliogenic TF', expr_boxplot) + ggtitle("Gliogenic TF")
+d <- violinas(markers$'Oligodendrocyte Precursor', expr_boxplot) + ggtitle("Oligodendrocyte Precursor")
+e <- violinas(markers$'postmitotic neurons', expr_boxplot) + ggtitle("postmitotic neurons")
+
+(a | b)
+```
+```{r, fig.width=20}
+(c | d |e)
+```
+
+
+### Neuronų tipai
+```{r, fig.width= 18}
+a <- violinas(neuronal$Dopaminenergic, expr_boxplot) + ggtitle("Dopaminenergic")
+b <- violinas(neuronal$Cholinergic, expr_boxplot) + ggtitle("Cholinergic")
+c <- violinas(neuronal$GABAergic, expr_boxplot) + ggtitle("GABAergic")
+d <- violinas(neuronal$Glutamatergic, expr_boxplot) + ggtitle("Glutamatergic")
+
+
+(a | b)
+```
+```{r, fig.width=20}
+(c | d |e)
+```
+
+```{r, fig.height=10, fig.width=20}
+a <- violinas(neuronal$'pan-neuronal', expr_boxplot) + ggtitle("pan-neuronal")
+b <- violinas(neuronal$'Canoonical neuronal subtype', expr_boxplot) + ggtitle("Canoonical neuronal subtype")
+c <- violinas(neuronal$'Canonical fibroblast', expr_boxplot) + ggtitle("Canonical fibroblast")
+
+(a | b | c)
+```
+
+
+
+## Kelių straipsnių su MES, ADRN, nervine ketera ir jos diferenciacijos atšakomis {.tabset} 
+[van Groningen](http://dx.doi.org/10.1038/ng.3899), [Jansky 2021](doi.org/10.1038/s41588-021-00806-1), 
+[Dong 2020](https://doi.org/10.1016/j.ccell.2020.08.014), [Kameneva 2021](10.1038/s41588-021-00818-x)
+
+Atliko single-cell, iš kurių gauti marekeriai, neuroblastomos identitetui
+
+```{r}
+#daug skirtingu
+markers <- read_excel("~/NB_lncRNA/input/markers_from_articles.xlsx")
+```
+
+
+### Ląstelės panašesnė į MES ar ADRN
+
+- MES - mezenchiminėms ląstelėms būdingi genai (gydymui atsparūs)
+
+- ADRN - adrenerginėm ląstelėms būdingi genai (gydimui jautrūs)
+ 
+```{r}
+all_genes <- unique(c(markers$Mesenchymal, markers$Adrenergic))
+gene_sets <- list(Mesenchymal = markers$Mesenchymal, Adrenergic = markers$Adrenergic)
+```
+```{r}
+gene_sets <- lapply(gene_sets, function(gs) {
+  intersect(gs, rownames(df_expr_4))
+})
+
+scores <- sapply(gene_sets, function(gs) {
+  colMeans(df_expr_4[gs, , drop = FALSE])
+})
+
+df <- data.frame(
+  sample = rownames(scores),
+  scores,
+  Group = df_info_4$inss.stage)
+
+df_long <- pivot_longer(
+  df,
+  cols = names(gene_sets),
+  names_to = "gene_set",
+  values_to = "score"
+)
+ggplot(df_long, aes(x = Group, y = score, fill = Group)) +
+  geom_violin(outlier.shape = NA) +
+  geom_jitter(width = 0.1, size = 1, alpha = 0.5) +
+  facet_wrap(~gene_set)
+
+```
+
+### Ląstelių diferenciacijos lygmuo
+
+- Nervinė ketera ar Noradrenerginė grupė
+
+- iš švano ląstelių atsiranda neuroblastai ir chromafininės ląstelės
+
+```{r, fig.height=12, fig.width=12}
+violinas(markers$'Neural Crest Cells-like', expr_boxplot) + ggtitle("Neural Crest Cells-like")
+violinas(markers$Noradrenergic, expr_boxplot) + ggtitle("Noradrenergic")
+violinas(markers$'Chromaffin cells', expr_boxplot) + ggtitle("Chromaffin cells")
+violinas(markers$'Sympathetic Neuroblasts', expr_boxplot) + ggtitle("Sympathetic Neuroblasts")
+violinas(markers$'Shwann cells presucors', expr_boxplot) + ggtitle("Shwann cells presucors")
+```
+```{r, fig.width= 12}
+violinas(markers$'Outside sympathoadrenral lineage', expr_boxplot) + ggtitle("Outside sympathoadrenral lineage")
+```
+
+## Markeriai iš Gerda Kildisiute et. all 2021 {.tabset}
+[Tumor to normal single-cell mRNA comparisons reveal a pan-neuroblastoma cancer cell](https://doi.org/10.1126/sciadv.abd3311).
+
+```{r}
+markers <- read_xlsx("~/NB_lncRNA/input/cell_ident/Neuronal markers.xlsx", sheet = 2)
+```
+
+### MES, NB ir other cells
+```{r, fig.width= 12, fig.height=14}
+violinas(markers$Mesenchyme, expr_boxplot) + ggtitle("Mesenchyme")
+```
+```{r, fig.width= 12}
+violinas(markers$Neuroblastoma, expr_boxplot) + ggtitle("Neuroblastoma")
+```
+```{r, fig.height=12,fig.width=12}
+violinas(markers$Cortex, expr_boxplot) + ggtitle("Cortex")
+violinas(markers$Endothelium, expr_boxplot) + ggtitle("Endothelium")
+violinas(markers$Erythoblasts, expr_boxplot) + ggtitle("Erythoblasts")
+violinas(markers$Other, expr_boxplot) + ggtitle("Other")
+
+```
+
+### Ląstelių diferenciacijos lygmuo
+
+-  most cancer cells show strong chromaffin cell-like features
+
+```{r, fig.height=14,  fig.width=14}
+violinas(markers$SCPs, expr_boxplot) + ggtitle("SCPs")
+violinas(markers$Bridge, expr_boxplot) + ggtitle("Bridge")
+violinas(markers$'Sympathoblastic/Chromaffin', expr_boxplot) + ggtitle("Sympathoblastic/Chromaffin")
+violinas(markers$Chromaffin, expr_boxplot) + ggtitle("Chromaffin")
+
+```
+
+
+
+
 
 

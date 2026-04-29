@@ -29,9 +29,9 @@ counts_lnc <- counts_lnc[, samples2do]
 dds <- readRDS("~/NB_lncRNA/output/code/BioInsights/Bastimat/dds_lnc.RDS")
 vsd <- assay(vst(dds)) %>% as.data.table(., keep.rownames=TRUE) 
 
-mat <- vsd[,-1]
-mat <- as.matrix(mat)
-rownames(mat) <- vsd$rn
+mat_lnc <- vsd[,-1]
+mat_lnc <- as.matrix(mat_lnc)
+rownames(mat_lnc) <- vsd$rn
 
 res <- results(dds) %>% as.data.table(., keep.rownames=TRUE) 
 
@@ -40,7 +40,7 @@ sig_lncRNAs <- sig_lncRNAs[order(sig_lncRNAs$padj), ]
 sig_lncRNAs$gene_id <- rownames(sig_lncRNAs)
 sig_lncRNAs <- as.data.frame(sig_lncRNAs)
 #rownames(sig_lncRNAs) <- sub("\\..*$", "", rownames(sig_lncRNAs))
-mat_filt_lnc <- mat[rownames(mat) %in% sig_lncRNAs$rn, ]
+mat_filt_lnc <- mat_lnc[rownames(mat_lnc) %in% sig_lncRNAs$rn, ]
 rownames(mat_filt_lnc) <- sub("\\..*$", "", rownames(mat_filt_lnc))
 ```
 
@@ -94,14 +94,14 @@ gridExtra::grid.arrange(g1, g2, g3, ncol = 3)
 Bendrai pagal visus raiškos duomenis, mėginiai pagal lncRN hypox grupė panaši tarpusavyje, o Normox ne.
  Pagal mRNA ir bendrai visus raiškos duomenis panašus yra pagal klonus.
 ```{r, fig.height= 10, fig.width = 18}
-countai <- rbind(counts_lnc, counts_pc)
-countai_group <- countai[, c(2, 3, 6, 7, 1, 4, 5)]
-counts_lnc_group <- counts_lnc[, c(2, 3, 6, 7, 1, 4, 5)]
-counts_pc_group <- counts_pc[, c(2, 3, 6, 7, 1, 4, 5)]
+mat_all <- rbind(mat_lnc, mat_pc)
+mat_group <- mat_all[, c(2, 3, 6, 7, 1, 4, 5)]
+mat_lnc_group <- mat_lnc[, c(2, 3, 6, 7, 1, 4, 5)]
+mat_pc_group <- mat_pc[, c(2, 3, 6, 7, 1, 4, 5)]
 
-a <- get_cor(counts_lnc_group, title = "lncRNA")
-b <-get_cor(counts_pc, title = "mRNA")
-c <-get_cor(countai, title = "Bendras")
+a <- get_cor(mat_lnc_group, title = "lncRNA")
+b <-get_cor(mat_pc, title = "mRNA")
+c <-get_cor(mat_all, title = "Bendras")
 
 a | b| c
 ```
