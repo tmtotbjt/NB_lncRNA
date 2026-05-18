@@ -1,6 +1,4 @@
-## radimas genų, kurių promotorius/reguliacinis regionas
-#turi CCTGCG motyvą (prie jo jungiasi CD44-ICD)
-#ir sumapinimas prie Symbol ir ensID
+# radimas genų, kurių promotorius/reguliacinis regionas turi CCTGCG motyvą (prie jo jungiasi CD44-ICD)
 
 # .fai pasidarymas
 samtools faidx GRCh38.primary_assembly.genome.fa
