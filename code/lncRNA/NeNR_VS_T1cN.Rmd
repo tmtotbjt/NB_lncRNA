@@ -1,0 +1,142 @@
+```{r}
+library(pacman)
+p_load(data.table, dplyr, DESeq2, tximport, DT, foreach, clusterProfiler, org.Hs.eg.db, rtracklayer, 
+ComplexHeatmap, RColorBrewer, ggplot2, DESeq2, ggrepel) 
+options(scipen=999)
+knitr::opts_chunk$set(fig.width=6, fig.height=6)
+dir.create(outdatadir, recursive=TRUE)
+pthres <- 0.05
+lfc <- log2(2)
+source("code/common.R")
+dir.create(paste0("report/out_html/code/", basename(dirname(outdatadir)), "/", basename(outdatadir), "/pval/"), recursive=TRUE)
+dir.create(paste0("report/out_html/code/", basename(dirname(outdatadir)), "/", basename(outdatadir), "/pvalOnly/"), recursive=TRUE)
+```
+
+Samples used in this page: 
+
+```{r}
+tmp <- readRDS(paste0("output/code/lncRNA/DataQC/", "data2DEG.RDS"))
+txi <- tmp[[1]]
+sampleInfo <- tmp[[2]]
+
+controle <- "POS" #strsplit(basename(outdatadir), "_VS_") %>% sapply(., `[`, 2)
+samplas <- "NEG" #strsplit(basename(outdatadir), "_VS_") %>% sapply(., `[`, 1)
+samples2do <- c("T1cN1", "T1cN2", "NeNR1", "NeNR2")
+sampleInfo <- sampleInfo[Barcode %in% samples2do, ] 
+sampleInfo$Group <- sampleInfo$POSNEG
+
+DT::datatable(sampleInfo[, .(sample, replicate)], class = 'cell-border stripe')
+
+tmp <- foreach(i=1:3) %do% {
+  txi[[i]] <- txi[[i]][, colnames(txi[[i]]) %in% sampleInfo$sample]  
+}
+sampleInfo <- sampleInfo[order(match(sample, colnames(txi[[1]])))]
+sampleInfo$group <- sampleInfo$Group
+stopifnot(all(colnames(txi[[1]]) == sampleInfo$Barcode))
+```
+
+# Results {.tabset}
+
+```{r}
+dds_list <- get_DDS(txi, sampleInfo, controle, pthres, lfc)
+dge_id <- dds_list[["res"]] %>% as.data.table(., keep.rownames=TRUE) %>% .[padj <= pthres & abs(log2FoldChange) >= lfc, rn] 
+saveRDS(dds_list, paste0(outdatadir, controle, "_vs_", samplas, ".RDS"))
+countai <- counts(dds_list[["dds"]]) %>% as.data.table
+vst_counts <- assay(dds_list[["vsd"]]) %>% as.data.table(., keep.rownames=TRUE) 
+```
+
+## Quality plots 
+
+This part include PCA and correlations graph. 
+In the PCA we hope to see segregation between our sample groups on the first PC. We also hope to see that first PC explain was majority of data variability. 
+
+Most probably we will see a trend, but results will not be ideal. Most probably we will see some bias in biological replicates. 
+
+```{r}
+get_PCA(countai, sampleInfo)
+```
+
+Correlation plot (pearson correlation) should show higher correlation within a group (in comparison to correlation between groups). 
+
+
+```{r}
+ht <- get_cor(countai, sampleInfo)
+draw(ht, annotation_legend_side = "right", heatmap_legend_side = "bottom", legend_grouping = "original")
+```
+
+Second PCA plot was made using normalized counts (VST transformation). This one should look better. 
+
+```{r}
+get_PCA(assay(dds_list[["vsd"]]), sampleInfo, "PCA on VST transformed counts")
+```
+
+## DEG plots
+
+In this part we have a heatmap, a Volcano plot, an interactive MA plot and results table (with all genes being analysed). 
+
+A Volcano plot shows relationship between adjusted p-value and log2fold change. 
+
+```{r}
+get_volcano(dds_list[["res"]], pthres, lfc)
+```
+
+A heatmap is a classical way to visualize differentially expressed genes.
+
+```{r}
+get_heatmap(dge_id, vst_counts, paste0(controle, " vs. ", samplas))
+```
+
+
+```{r}
+lncRNA_types <- readRDS("output/code/General/lncRNA_list/lncRNA_types.RDS")
+
+lncRNA_types %>% 
+  as.data.table() %>% 
+  .[gene_id %in% dge_id, type] %>% 
+  table() %>% 
+  as.data.table() %>% 
+  setnames(., c("Type", "amount")) %>% 
+  ggplot(aes(x=Type, y=amount, fill=Type, label=amount)) +
+    geom_col() +
+    theme_bw() +
+    geom_label() +
+    #geom_label_repel() +
+    scale_fill_brewer(palette="Dark2") +
+    coord_flip() +
+    theme(legend.position="bottom")
+```
+
+## DEG plots II  
+
+Labai panaši analizė, bet pridėtas fold change stabilizavimas (LFC shrinkage) naudojant apeglm. 
+
+
+```{r}
+get_volcano(dds_list[["dds_shrunken"]], pthres, lfc)
+dge_id_shrunken <- dds_list[["dds_shrunken"]] %>% 
+  as.data.table(., keep.rownames=TRUE) %>% 
+  .[abs(log2FoldChange) >= lfc & padj <= pthres, rn]
+```
+
+A heatmap is a classical way to visualize differentially expressed genes.
+
+```{r}
+get_heatmap(dge_id_shrunken, vst_counts, paste0(controle, " vs. ", samplas))
+```
+
+```{r, fig.height=4}
+lncRNA_types %>% 
+  as.data.table() %>% 
+  .[gene_id %in% dge_id_shrunken, type] %>% 
+  table() %>% 
+  as.data.table() %>% 
+  setnames(., c("Type", "amount")) %>% 
+  ggplot(aes(x=Type, y=amount, fill=Type, label=amount)) +
+    geom_col() +
+    theme_bw() +
+    geom_label() +
+    #geom_label_repel() +
+    scale_fill_brewer(palette="Dark2") +
+    coord_flip() +
+    theme(legend.position="bottom")
+```

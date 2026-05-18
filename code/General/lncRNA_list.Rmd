@@ -1,0 +1,60 @@
+```{r}
+library(pacman)
+p_load(data.table, dplyr, GenomicRanges, GenomicFeatures) 
+knitr::opts_chunk$set(fig.width=6, fig.height=6)
+dir.create(outdatadir, recursive=TRUE)
+```
+
+# lncRNA anotaciju pasirengimas 
+
+padarytos grupes (pagal Ma, Bajic, Zhang 2013 bei kiek praplėsta):
+
+egzoninės sense  
+egzoninės antisence  
+egzoninės mix  
+introninės lncRNA (visiškai nedengia jokio egzono. Kryptis nesvarbu)  
+intergenic lncRNA (>10kb nuo artimiausio protein coding geno)  
+artimos lncRNA (10 kb nuo geno pradzios )  
+
+
+```{r}
+GFF <- rtracklayer::import("input/gencode.v49.annotation.gtf.gz")
+mcols(GFF)$ID <- paste0(seqnames(GFF), "_", start(GFF), "_", end(GFF), "_", strand(GFF))
+
+protein_coding <- GFF[mcols(GFF)$gene_type == "protein_coding" & mcols(GFF)$type == "gene", ]
+protein_coding_pradzios <- promoters(protein_coding, upstream=10000, downstream=0)
+lncRNA  <- GFF[mcols(GFF)$gene_type == "lncRNA" & mcols(GFF)$type == "gene", ] 
+egzonai <- GFF[mcols(GFF)$type == "exon" & mcols(GFF)$gene_type == "protein_coding"]
+egzonai_flip <- copy(egzonai)
+strand(egzonai_flip) <- ifelse(strand(egzonai_flip) == "+", "-", "+")
+
+
+tmp <- elementMetadata(lncRNA)[, c("gene_id", "gene_name")]
+elementMetadata(lncRNA) <- NULL
+elementMetadata(lncRNA) <- tmp 
+mcols(lncRNA)$exon_any <- countOverlaps(lncRNA, egzonai, ignore.strand=TRUE) > 0
+mcols(lncRNA)$exon_sense <- countOverlaps(lncRNA, egzonai, ignore.strand=FALSE) > 0
+mcols(lncRNA)$exon_antisense <- countOverlaps(lncRNA, egzonai_flip, ignore.strand=FALSE) > 0
+mcols(lncRNA)$exons_mix <- mcols(lncRNA)$exon_sense & mcols(lncRNA)$exon_antisense
+mcols(lncRNA)$exon_sense[mcols(lncRNA)$exons_mix == TRUE] <- FALSE
+mcols(lncRNA)$exon_antisense[mcols(lncRNA)$exons_mix == TRUE] <- FALSE
+mcols(lncRNA)$intronic <- countOverlaps(lncRNA, protein_coding) > 0
+mcols(lncRNA)$intronic[mcols(lncRNA)$exon_any] <- FALSE
+mcols(lncRNA)$promotorines <- countOverlaps(lncRNA, protein_coding_pradzios) > 0 
+mcols(lncRNA)$promotorines[mcols(lncRNA)$exon_any] <- FALSE
+mcols(lncRNA)$promotorines[mcols(lncRNA)$intronic] <- FALSE
+mcols(lncRNA)$intergenines <- TRUE
+mcols(lncRNA)$intergenines[mcols(lncRNA)$exon_any | mcols(lncRNA)$intronic | mcols(lncRNA)$promotorines] <- FALSE
+
+
+mcols(lncRNA)$type <- "KITA"
+mcols(lncRNA)$type[mcols(lncRNA)$exon_sense] <- "exon_sense"
+mcols(lncRNA)$type[mcols(lncRNA)$exon_antisense] <- "exon_antisense"
+mcols(lncRNA)$type[mcols(lncRNA)$exons_mix] <- "exons_mix"
+mcols(lncRNA)$type[mcols(lncRNA)$intronic] <- "intronic"
+mcols(lncRNA)$type[mcols(lncRNA)$promotorines] <- "promotorines"
+mcols(lncRNA)$type[mcols(lncRNA)$intergenines] <- "intergenines"
+
+
+elementMetadata(lncRNA)[, c("gene_id", "gene_name", "type")] %>% as.data.table() %>% saveRDS(., paste0(outdatadir, "lncRNA_types.RDS"))
+```

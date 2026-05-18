@@ -1,0 +1,41 @@
+```{r}
+library(pacman)
+p_load(data.table, dplyr, DT)
+```
+
+# Samples {.tabset}
+
+## RNAseq 
+
+```{r}
+d <- fread("input/RNA_samples_251104.txt")
+
+
+datatable(
+  d,
+  filter = "top",
+  extensions = "Buttons",
+  options = list(
+    dom = "Bfrtip",
+    buttons = c("copy", "csv", "excel", "pdf", "print"),
+    pageLength = -1,                 # show ALL rows
+    lengthMenu = list(c(-1, 10, 25, 50), c("All", 10, 25, 50)),
+    autoWidth = TRUE,
+    rowCallback = JS(
+        "function(row, data) {
+          for (var i = 0; i < row.cells.length; i++) {
+            row.cells[i].style.padding = '2px 6px';
+          }
+        }"
+      )
+  )
+) %>%
+  formatStyle(
+    "COMP",
+    target = "row",
+    backgroundColor = styleEqual(
+      c("Y", "G", "B", "R", "O", "P", "W"),
+      c("yellow", "green", "lightblue", "red", "orange", "pink", "white")
+    )
+  )
+```  

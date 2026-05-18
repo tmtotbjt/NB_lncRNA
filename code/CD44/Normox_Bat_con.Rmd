@@ -1,0 +1,290 @@
+```{r}
+library(pacman)
+p_load(rtracklayer, dplyr, data.table, DESeq2, ggplot2, ggrepel, tidyr, 
+      readxl, clusterProfiler, pheatmap, flashClust, ggraph, forcats,
+      ComplexHeatmap, gridExtra, grid, tidygraph, edgeR, ggvenn)
+knitr::opts_chunk$set(fig.width=6, fig.height=6, echo = T)
+source("~/NB_lncRNA/code/BioInsights/more_code.R")
+```
+
+```{r}
+tmp <-  readRDS("~/NB_lncRNA/output/code/lncRNA/DataQC/data2DEG.RDS")
+sampleInfo <- tmp[[2]]
+samples2do <- c("T1cN1", "T1cN2", "T1N1", "T1N2", "K7N1", "K7N2", "K7cN1", "K7cN2")
+sampleInfo <- sampleInfo[Barcode %in% samples2do, ] 
+sampleInfo$Group <- sampleInfo$Treatment
+sampleInfo$Group <- fct_relevel(sampleInfo$Group, "control", "Batimastat")
+```
+```{r}
+DT::datatable(sampleInfo[, .(sample, Oxygen, Group)], class = 'cell-border stripe')
+```
+```{r}
+#Protein coding
+duomenys <- readRDS("~/NB_lncRNA/input/data2DEG_protein.RDS")
+
+list_of_4 <- duomenys[[1]]
+ilgis <- list_of_4[[3]]
+ilgis <- ilgis[, samples2do]
+counts_pc <- list_of_4[[2]]
+counts_pc <- counts_pc[, samples2do]
+
+dds <- readRDS("~/NB_lncRNA/output/code/BioInsights/Bastimat/dds_pc_NBC.RDS")
+vsd_pc <- vst(dds)
+mat_pc <- assay(vsd_pc)
+rownames(mat_pc) <- sub("\\..*$", "", rownames(mat_pc))
+res_pc <- results(dds) %>% as.data.table(., keep.rownames=TRUE)
+res_pc$rn <- sub("\\..*$", "", res_pc$rn)
+
+
+sig <- subset(res_pc, padj < 0.05)
+sig <- sig[order(sig$padj), ]
+sig <- as.data.frame(sig)
+sig$rn <- sub("\\..*$", "", sig$rn)
+mat_filt_pc <- mat_pc[rownames(mat_pc) %in% sig$rn, ]
+rownames(mat_pc) <- sub("\\..*$", "", rownames(mat_pc))
+
+resultsNames(dds)
+```
+
+# CD44 raiška mėginiuose
+
+Pasižiūrėti ar skirtumai dėl *CD44* raiškos pokyčio ir skirtumo, ar dėl Batimastato sąveika su ICD dalele.
+```{r}
+rpkmai <- edgeR::rpkm(counts_pc, gene.length=rowMeans(ilgis))
+rpkmai <- log2(rpkmai + 1)
+rownames(rpkmai) <- sub("\\..*$", "", rownames(rpkmai))
+
+mat_boxplot <- reshape2::melt(as.matrix(rpkmai))
+colnames(mat_boxplot) <- c("Gene", "Sample", "Expression")
+mat_boxplot$Group <- sampleInfo$Group[match(mat_boxplot$Sample, sampleInfo$Barcode)]
+mat_boxplot_cd44 <- mat_boxplot[mat_boxplot$Gene %in% "ENSG00000026508", ]
+
+ggplot(mat_boxplot_cd44, aes(x = Group, y = Expression, fill = Group)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.7) +  
+  geom_jitter(width = 0.2, size = 2) +
+  theme_minimal() +
+  labs(title = bquote(italic(.("CD44")) * " geno raiška"),
+       x = "Grupė",
+       y = "Raiškos lygis (log2)",
+       fill = "Stadija") +
+  scale_fill_brewer(palette = "Set2") +
+  geom_text_repel(aes(label = Sample))
+```
+
+# Genai su promotorinėje srityje rastu CCTGCG motyvu {.tabset}
+
+Paimtas promotoriaus regionas po 500 down- ir up- stream
+
+## Bendra genų apžvalga
+```{r}
+cd44_genes <- readLines("~/NB_lncRNA/input/cd44_motiff/candidate_genes_ensembl_d500.txt")
+cd44_genes <- sub("\\..*$", "", cd44_genes)
+```
+```{r}
+cd44_mot <- res_pc[res_pc$rn %in% cd44_genes,]
+su_cd44 <- sig[sig$rn %in% cd44_genes,]
+
+all_non <- mat_filt_pc[!rownames(mat_filt_pc) %in% cd44_genes, ]
+
+mat_cd <- mat_pc[rownames(mat_pc) %in% su_cd44$rn, ]
+```
+```{r}
+gene_sets <- list(`Visi baltymą \nkoduojantys genai`= res_pc$rn, `Genai su motyvu` = cd44_genes)
+ggvenn(gene_sets, fill_color = c("#1F77B4", "#FF7F0E"), stroke_size = 0.5)
+cat("Bendras baltymą koduojančių genų skaičius: ", nrow(res_pc), "\n")
+cat("Su motyvu promotoriuje, prie kurio gali jungtis CD44-ICD: ", length(cd44_genes), "\n")
+cat("Su motyvu koduojantys baltymą:", nrow(cd44_mot), "\n")
+```
+```{r}
+cat("Statistiškai reikšmingai pakitusių genų skaičius: ", nrow(mat_filt_pc), "\n")
+cat("Statistiškai reikšmingai pakitusių genų su motyvu promotorije skaičius: ", nrow(mat_cd), "\n")
+```
+```{r}
+total <- nrow(res_pc)
+motif <- nrow(cd44_mot)
+signif <- nrow(mat_filt_pc)
+signif_motif <- nrow(mat_cd)
+
+mat_fish <- matrix(c(signif_motif, signif - signif_motif, motif - signif_motif, total - motif - (signif - signif_motif)), nrow = 2, byrow = TRUE)
+colnames(mat_fish) <- c("Motif", "No_motif")
+rownames(mat_fish) <- c("Sig", "Not_sig")
+
+fisher.test(mat_fish)
+```
+
+
+## Bendras mėginių pasižiūrėjimas {.tabset}
+
+### Koreliacija pagal mėginius
+```{r, fig.height= 10, fig.width = 18}
+mat_visi <- mat_filt_pc[, c(1, 2, 7, 8, 3, 4, 5, 6)]
+mat_be_mot <- all_non[, c(1, 2, 7, 8, 3, 4, 5, 6)]
+mat_su_mot <- mat_cd[, c(1, 2, 7, 8, 3, 4, 5, 6)]
+a <- get_cor(mat_visi, sampleInfo)+ ggtitle("Visi")
+b <- get_cor(mat_be_mot, sampleInfo)+ ggtitle("Be  motyvo")
+c <- get_cor(mat_su_mot, sampleInfo)+ ggtitle("Su motyvu")
+
+a | b| c
+```
+
+### PCA
+```{r, fig.height= 10, fig.width = 18}
+a <- get_pca(mat_filt_pc, sampleInfo)+ ggtitle("Visi")
+b <- get_pca(all_non, sampleInfo)+ ggtitle("Be  motyvo")
+c <- get_pca(mat_cd, sampleInfo)+ ggtitle("Su motyvu")
+
+a|b|c
+```
+
+## Statistinis palyginimas genų su cd44 jungimosi motyvu promotorinėje srityje su be motyvo promotorinėje srityje {.tabset}
+
+### Genų su motyvo raiška per grupę
+```{r}
+motif_B <- apply(mat_cd[, sampleInfo$Group == "Batimastat"], 1, median)
+motif_control <- apply(mat_cd[, sampleInfo$Group == "control"], 1, median)
+
+cat("Raiškos mediana p < 0,05 genų su motyvo genų grupėje su poveikiu", median(motif_B, na.rm = TRUE),"\n")
+cat("Raiškos mediana p < 0,05 genų su motyvo genų grupėje be poveikio", median(motif_control, na.rm = TRUE),"\n")
+```
+```{r}
+all_B <- apply(all_non[, sampleInfo$Group == "Batimastat"], 1, median)
+all_control <- apply(all_non[, sampleInfo$Group == "control"], 1, median)
+
+cat("Raiškos mediana visų p < 0,05 genų be motyvo genų grupėje su poveikiu", median(all_B, na.rm = TRUE),"\n")
+cat("Raiškos mediana visų p < 0,05 genų be motyvo genų grupėje be pooveikio", median(all_control, na.rm = TRUE),"\n")
+```
+
+Stebimas skirtumas grupės viduje tarp motyvą turinčių ir neturinčių genų nėra didelis.
+
+### wilcoxson'o testas
+
+Ar stebimas skirtumas grupėje (yra/nėra poveikio) tarp motyvą turinčių ir ne genų yra reikšmingas.
+```{r}
+wilcox_B <- wilcox.test(motif_B, all_B)
+cat("p.value stebimo skirtirtumo poveikio grupėje: ", wilcox_B$p.value, "\n")
+```
+```{r}
+wilcox_con <- wilcox.test(motif_control, all_control)
+cat("p.value stebimo skirtirtumo kontrolinėje grupėje: ", wilcox_con$p.value, "\n")
+```
+
+Stebimas nedidelis pokytis abejose grupėse yra reikšmingas
+
+
+### Distribution
+
+```{r}
+calc_delta <- function(mat, group_info) {
+  pos <- apply(mat[, group_info == "control"], 1, median, na.rm = TRUE)
+  neg <- apply(mat[, group_info == "Batimastat"], 1, median, na.rm = TRUE)
+  pos - neg
+}
+
+delta_motif <- calc_delta(
+  mat_pc[rownames(mat_pc) %in% cd44_genes, ],
+  sampleInfo$Group
+)
+
+delta_non <- calc_delta(
+  mat_filt_pc[!rownames(mat_filt_pc) %in% cd44_genes, ],
+  sampleInfo$Group
+)
+
+
+df <- data.frame(
+  delta = c(delta_motif, delta_non),
+  group = c(
+    rep("Motif", length(delta_motif)),
+    rep("No motif", length(delta_non))
+  )
+)
+
+ggplot(df, aes(x = group, y = delta, fill = group)) +
+  geom_violin(alpha = 0.5) +
+  geom_boxplot(width = 0.2, fill = "white") +
+  geom_jitter(width = 0.1, alpha = 0.3) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  theme_minimal() +
+  labs(
+    y = "Δ raiškos mediana (Kontrolė - Batimastat)"
+  ) +
+  scale_fill_manual(values = c("Motif" = "blue", "No motif" = "orange"))
+
+```
+
+# Genai iš literatūros
+```{r}
+litera <- readLines("~/NB_lncRNA/input/cd44_motiff/cd44_dbENS.txt")
+litera_sym <- readLines("~/NB_lncRNA/input/cd44_motiff/cd44_db.txt")
+
+print(litera_sym)
+```
+```{r}
+mat_litera <- mat_filt_pc[rownames(mat_filt_pc) %in% litera, ]
+```
+```{r}
+cat("Bendras baltymą koduojančių genų skaičius: ", nrow(res_pc), "\n")
+cat("Genai, kurių raišką CD44 veikia (kaip TF): ", length(litera), "\n")
+```
+```{r}
+cat("Statistiškai reikšmingai pakitusių genų skaičius: ", nrow(mat_filt_pc), "\n")
+cat("Statistiškai reikšmingai pakitusių genų iš literatūros skaičius: ", nrow(mat_litera), "\n")
+```
+Statistiškai reikšmingai pakitę iš literatūroje paminėtų genų yra ALDOC, PFKFB4, MYC, PDK1
+
+# Glikolizės genai
+
+```{r}
+glic_genes <- readRDS("~/NB_lncRNA/input/Hallmark_glycolysis.RDS")
+
+cd44_glic <- glic_genes[glic_genes$ENSEMBL %in% cd44_genes,]
+
+cat("Viso glikolizės genų (MSigDB):", nrow(glic_genes), "\n")
+cat("Glikolizės genai su CCTGCG motyvu:", nrow(cd44_glic), "\n")
+
+cat("Statistiškai reikmingai pakito:", nrow(sig), "\n")
+sig_glic <- sig[sig$rn %in% glic_genes$ENSEMBL,]
+cat("Iš jų glikolozės genų:", nrow(sig_glic), "\n")
+sig_glic <- sig[sig$rn %in% cd44_glic$ENSEMBL,]
+cat("Iš jų glikolozės genų su motyvu:", nrow(sig_glic), "\n")
+```
+
+```{r}
+log_counts <- log2(counts(dds, normalized=TRUE) + 1)
+rownames(log_counts) <- sub("\\..*$", "", rownames(log_counts))
+mat_glic <- log_counts[rownames(log_counts) %in% glic_genes$ENSEMBL,]
+annotation_col <- data.frame(Group = sampleInfo$Group)
+ann_colors = list(Group = c(control="cyan", Batimastat="lightpink"))
+mat_glic_h <- mat_glic[apply(mat_glic, 1, sd) != 0, ]
+mat_glic_h <- mat_glic_h[, c(1, 2, 7, 8, 3, 4, 5, 6)]
+annotation_col_h <- annotation_col[c(1, 2, 7, 8, 3, 4, 5, 6), ]
+annotation_col_h <- data.frame(annotation_col_h)
+colnames(annotation_col_h) <- "Group"
+pheatmap(mat_glic_h,
+           scale = "row",
+           annotation_col = annotation_col_h, annotation_colors = ann_colors,
+           show_rownames = FALSE, cluster_rows = TRUE, cluster_cols = F,
+           main = "Glikolizės genai")
+```
+```{r}
+glic_long <- mat_glic %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("gene") %>%
+  pivot_longer(
+    cols = -gene,
+    names_to = "sample",
+    values_to = "expression")
+
+glic_long <- glic_long %>%
+  left_join(sampleInfo, by = c("sample" = "Barcode"))
+
+
+ggplot(glic_long, aes(x = Group, y = expression, fill = Group)) +
+  geom_violin(trim = TRUE, alpha = 0.6) +
+  geom_boxplot(width = 0.1, outlier.shape = NA) +
+  geom_jitter(width = 0.2, size = 0.4, alpha = 0.3)+
+  theme_bw() +
+  labs(title = "Glikolizės genų raiška tarp grupių", x = "Group", y = "Expression")
+
+
+```

@@ -1,0 +1,515 @@
+```{r}
+library(pacman)
+p_load(data.table, dplyr, ggplot2, stringr, foreach, scales, ggpubr, RColorBrewer, vegan, ComplexHeatmap)
+options(scipen=999)
+knitr::opts_chunk$set(fig.width=9, fig.height=4)
+dir.create(outdatadir, recursive=TRUE)
+```
+
+
+```{r}
+get_FASTQC_stat <- function(samples2do, read_no, wdir="./") {
+  #get_FASTQC_stat(samplesInfo[type == "d", Barcode], "R1", "01")
+  R2 <- foreach(i=samples2do) %do% {
+    # R2 data 
+    R2 <- list()
+    cmd1 <- paste0("unzip -p ", wdir, i, "_", read_no, "_fastqc.zip ", i, "_", read_no, "_fastqc/fastqc_data.txt > tmp")
+    system(cmd1)
+    cmd2 <- paste0("perl -ne 'print if />>Basic Statistics/../>>END_MODULE/' tmp | grep -v \">>\"") 
+    R2[['Basic_Statistics']] <- fread(cmd=cmd2) %>% .[, sample := i]
+    cmd2 <- paste0("perl -ne 'print if />>Per base sequence quality/../>>END_MODULE/' tmp | grep -v \">>\"")  
+    R2[['Per_base_sequence_quality']] <- fread(cmd=cmd2) %>% .[, sample := i]
+    cmd2 <- paste0("perl -ne 'print if />>Per sequence quality scores/../>>END_MODULE/' tmp | grep -v \">>\"")  
+    R2[['Per_sequence_quality']] <- fread(cmd=cmd2) %>% .[, sample := i]
+    cmd2 <- paste0("perl -ne 'print if />>Per base sequence content/../>>END_MODULE/' tmp | grep -v \">>\"") 
+    R2[['Per_base_sequence_content']] <- fread(cmd=cmd2) %>% .[, sample := i]
+    cmd2 <- paste0("perl -ne 'print if />>Per sequence GC content/../>>END_MODULE/' tmp | grep -v \">>\"") 
+    R2[['Per_sequence_GC_content']] <- fread(cmd=cmd2) %>% .[, sample := i]
+    cmd2 <- paste0("perl -ne 'print if />>Per base N content/../>>END_MODULE/' tmp | grep -v \">>\"") 
+    R2[['Per_base_N_content']] <- fread(cmd=cmd2) %>% .[, sample := i]
+    cmd2 <- paste0("perl -ne 'print if />>Sequence Length Distribution/../>>END_MODULE/' tmp | grep -v \">>\"") 
+    R2[['Sequence_Length_Distribution']] <- fread(cmd=cmd2) %>% .[, sample := i]
+    cmd2 <- paste0("perl -ne 'print if />>Sequence Duplication Levels/../>>END_MODULE/' tmp | grep -v \">>\"") 
+    R2[['Sequence_Duplication_Levels']] <- fread(cmd=cmd2) %>% .[, sample := i]
+    cmd2 <- paste0("perl -ne 'print if />>Overrepresented sequences/../>>END_MODULE/' tmp | grep -v \">>\"") 
+    R2[['Overrepresented_sequences']] <- fread(cmd=cmd2) %>% .[, sample := i]
+    cmd2 <- paste0("perl -ne 'print if />>Adapter Content/../>>END_MODULE/' tmp | grep -v \">>\"") 
+    R2[['Adapter_Content']] <- fread(cmd=cmd2) %>% .[, sample := i]   
+    
+    # clean up
+    system("rm tmp")
+    return(R2)
+                                  } 
+  names(R2) <- samples2do                                
+  return(R2)
+} 
+
+get_lib_size <- function(x, samples=samplesInfo) {
+  d <- sapply(x, `[`, 1) %>% rbindlist()
+  colnames(d) <- gsub("#", "", colnames(d))
+  #saveRDS(d, paste0(outdatadir, "Raw_size.RDS"))
+  as.data.table(d) %>% 
+    .[, sample := factor(sample, levels=samples$Barcode, labels=samples$name)] %>% 
+    .[Measure == "Total Sequences", ] %>% 
+    .[, Value := as.numeric(Value)] %>%
+    ggplot(., aes(sample, Value)) +
+      geom_bar(stat="identity") +
+      theme_bw() +
+      ggtitle("Library size") +
+      ylab("Number of reads") +
+      scale_y_continuous(labels = label_number(suffix = " M", scale = 1e-6)) +
+      theme(axis.title.x=element_blank(), 
+            axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))  +
+      guides(color = guide_legend(override.aes = list(size = 6)))
+}
+
+get_per_base_quality <- function(x, samples=samplesInfo) {
+  d <- sapply(x, `[`, 2) %>% rbindlist() 
+  colnames(d) <- gsub("#", "", colnames(d)) %>% 
+    gsub(" ", "_", .) %>% 
+    gsub("10th", "Low", .) %>% 
+    gsub("90th", "Up", .)
+  setDT(d)
+  tvarka <- d[sample == samples$Barcode[1], Base]
+
+  as.data.table(d) %>% 
+    .[, Base := factor(Base, levels=tvarka)] %>%
+    .[, sample := factor(sample, levels=samples$Barcode, labels=samples$name)] %>% 
+    ggplot() +
+    geom_boxplot(aes(x=Base,
+                    ymax = Up_Percentile,
+                    upper = Upper_Quartile,
+                    y = Median,
+                    middle = Median, 
+                    lower = Lower_Quartile, 
+                    ymin = Low_Percentile), stat = "identity") +
+    geom_line(aes(x=Base, Mean, group=sample), color="blue") +                 
+    geom_line(aes(x=Base, Median, group=sample), color="red") + 
+    geom_rect(aes(xmin=0, xmax=last(tvarka), ymin=0, ymax=20), fill="pink", alpha=0.01) + 
+    geom_rect(aes(xmin=0, xmax=last(tvarka), ymin=20, ymax=28), fill="lightgoldenrod", alpha=0.01) +                
+    geom_rect(aes(xmin=0, xmax=last(tvarka), ymin=28, ymax=38), fill="palegreen", alpha=0.01) + 
+    facet_wrap(~sample, ncol=2) +
+    theme_bw() +
+    ylim(0, 38) +
+    ggtitle("Per base quality. R1") +
+    ylab("PHRED") +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+          axis.title.x = element_blank(), 
+          legend.position = "none",
+          axis.ticks.x = element_blank())  
+}
+
+get_per_sequence_quality <- function(x, samples=samplesInfo) {
+    d <- sapply(x, `[`, 3) %>% 
+    rbindlist() 
+  colnames(d) <- gsub("#", "", colnames(d))
+  as.data.table(d) %>% 
+    .[, sample := factor(sample, levels=samples$Barcode, labels=samples$name)] %>% 
+    ggplot(., aes(Quality, Count, color = sample, group=sample)) +   
+      geom_point() +
+      geom_line() +
+      theme_bw() +
+      scale_y_continuous(labels = label_number(suffix = " M", scale = 1e-6)) +
+      ggtitle("Per sequence quality R1") +
+      ylab("Number of paires") +
+      scale_color_brewer(palette = "Paired")  +
+      guides(color = guide_legend(override.aes = list(size = 6)))
+}
+
+get_per_base_content <- function(x, samples=samplesInfo) {
+  d <- sapply(x, `[`, 4) %>% 
+  rbindlist() 
+  colnames(d) <- gsub("#", "", colnames(d))
+  tvarka <- tvarka <- d[sample == samples$Barcode[1], Base]
+  melt(d, id.vars=c("Base", "sample")) %>% 
+    setnames(., c("Base", "sample", "BP", "Fraction")) %>% 
+    .[, sample := factor(sample, levels=samples$Barcode, labels=samples$name)] %>% 
+    .[, Base := factor(Base, levels=tvarka)] %>% 
+    ggplot(., aes(x=Base, y=Fraction, color=BP, group=BP)) +   
+      geom_point(size=0.5) +
+      geom_line() +
+      theme_bw() +
+      ggtitle("Per base sequence content") +
+      theme(legend.position="top", 
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+      facet_wrap(~sample, ncol=1) +
+      scale_color_brewer(palette = "Dark2") +
+      guides(color = guide_legend(override.aes = list(size = 6)))
+}
+
+get_per_seq_GC <- function(x, samples=samplesInfo){
+  d <- sapply(x, `[`, 5) %>% 
+  rbindlist() 
+  colnames(d) <- gsub("#", "", colnames(d))
+  as.data.table(d) %>% 
+  .[, sample := factor(sample, levels=samples$Barcode, labels=samples$name)] %>% 
+  ggplot(., aes(`GC Content`, Count, color = sample, group=sample)) +   
+    geom_point() +
+    geom_line() +
+    theme_bw() +
+    scale_y_continuous(labels = label_number(suffix = " M", scale = 1e-6)) +
+    ggtitle("Per sequence GC content  R1") +
+    ylab("Number of paires") +
+    scale_color_brewer(palette = "Paired")   +
+    guides(color = guide_legend(override.aes = list(size = 6)))
+}
+
+get_length_distribution <- function(x, samples=samplesInfo){
+  d <- sapply(x, `[`, 7) %>% 
+    rbindlist() 
+  colnames(d) <- gsub("#", "", colnames(d)) %>% gsub("-", "_", .)
+  tmp <- unique(d$sample) 
+  tvarka <- d[sample==tmp[1], Length]
+  d %>% 
+    .[, Length := factor(Length, levels=tvarka)] %>% 
+    .[, sample := factor(sample, levels=samples$Barcode, labels=samples$name)] %>%   
+      ggplot(., aes(Length, Count, color = sample, group=sample)) +   
+        geom_point(size=1) +
+        geom_line(alpha=0.5) +
+        theme_bw() +
+        scale_y_continuous(labels = label_number(suffix = " M", scale = 1e-6)) +
+        ggtitle("Sequence length distribution. R1") +
+        ylab("Number of paires") +
+        scale_color_brewer(palette = "Paired")   +
+        guides(color = guide_legend(override.aes = list(size = 6))) +
+        theme(axis.title.x=element_blank(), 
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+}
+
+get_adapter_content <-  function(x, samples=samplesInfo){
+    d <- sapply(x, `[`, 10) %>% 
+    rbindlist() 
+  colnames(d) <- gsub("#", "", colnames(d))
+  tvarka <- d[sample == samples$Barcode[1], Position]
+  as.data.table(d) %>% 
+    .[, P1:=NULL] %>% 
+    .[, B:=NULL] %>% 
+    melt(., id.vars=c("Position", "sample")) %>% 
+    as.data.table %>% 
+    .[, sample := factor(sample, levels=samples$Barcode, labels=samples$name)] %>%                 
+    setnames(., c("Position", "sample", "Adapter", "Fraction")) %>% 
+    as.data.table() %>% 
+    .[, Position := factor(Position, levels=tvarka)] %>% 
+      ggplot(., aes(x=Position, y=Fraction, color=Adapter, group=Adapter)) +   
+        geom_point(size=0.1) +
+        geom_line() +
+        theme_bw() +
+        ylim(0, 100) +
+        ggtitle("Adapter content. R1") +
+        theme(legend.position="top", 
+              axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+        guides(color=guide_legend(nrow=2,byrow=TRUE)) +
+        facet_wrap(~sample, ncol=2)   +
+        scale_color_brewer(palette = "Paired")   +
+        guides(color = guide_legend(nrow=2, byrow=TRUE, override.aes = list(size = 6)))
+}
+```
+
+```{r}
+samplesInfo <- fread("./input/samplesInfo_RNA.txt")
+samples2do <- samplesInfo$Barcode
+wdir <- "/mnt/store/kotryna/Vaidas/MIP_2023_RNA/"
+
+raw_data_R1 <- get_FASTQC_stat(samplesInfo[, Barcode], "R1", paste0(wdir, "figs/"))
+raw_data_R2 <- get_FASTQC_stat(samplesInfo[, Barcode], "R2", paste0(wdir, "figs/"))
+
+trimmed_data_R1 <- get_FASTQC_stat(samplesInfo[, Barcode], "val_1", paste0(wdir, "figs/"))
+trimmed_data_R2 <- get_FASTQC_stat(samplesInfo[, Barcode], "val_2", paste0(wdir, "figs/"))
+```
+
+# Data QC {.tabset}
+
+## Raw data 
+
+### Library size 
+```{r}
+get_lib_size(raw_data_R1)
+```
+
+### Per base quality {.tabset}
+
+#### R1 
+```{r, fig.width=9, fig.height=12}
+get_per_base_quality(raw_data_R1)
+```
+
+#### R2 
+```{r, fig.width=9, fig.height=12}
+get_per_base_quality(raw_data_R1)
+```
+
+### Per sequence quality
+
+```{r}
+ggarrange(get_per_sequence_quality(raw_data_R1[names(raw_data_R1) %in% samplesInfo[1:8, Barcode]]), get_per_sequence_quality(raw_data_R2[names(raw_data_R1) %in% samplesInfo[1:8, Barcode]]),  
+  common.legend=TRUE, 
+  labels = c("R1", "R2"),
+          hjust=-0.8, ncol=2) 
+```
+
+```{r}
+ggarrange(get_per_sequence_quality(raw_data_R1[names(raw_data_R1) %in% samplesInfo[9:16, Barcode]]), get_per_sequence_quality(raw_data_R2[names(raw_data_R1) %in% samplesInfo[9:16, Barcode]]),  
+  common.legend=TRUE, 
+  labels = c("R1", "R2"),
+          hjust=-0.8, ncol=2) 
+```
+
+### Per base content {.tabset}
+
+#### R1
+
+```{r, fig.width=9, fig.height=20}
+get_per_base_content(raw_data_R1)
+```
+
+#### R2 
+
+```{r, fig.width=9, fig.height=20}
+get_per_base_content(raw_data_R2)
+```
+
+### Per sequence GC content 
+
+```{r}
+ggarrange(get_per_seq_GC(raw_data_R1[names(raw_data_R1) %in% samplesInfo[1:8, Barcode]]), get_per_seq_GC(raw_data_R2[names(raw_data_R1) %in% samplesInfo[1:8, Barcode]]), 
+  common.legend=TRUE, 
+  labels = c("R1", "R2"),
+          hjust=-0.8, ncol=2) 
+```
+
+```{r}
+ggarrange(get_per_seq_GC(raw_data_R1[names(raw_data_R1) %in% samplesInfo[9:16, Barcode]]), get_per_seq_GC(raw_data_R2[names(raw_data_R1) %in% samplesInfo[9:16, Barcode]]), 
+  common.legend=TRUE, 
+  labels = c("R1", "R2"),
+          hjust=-0.8, ncol=2) 
+```
+
+### Length distribution
+
+```{r}
+ggarrange(get_length_distribution(raw_data_R1[names(raw_data_R1) %in% samplesInfo[1:8, Barcode]]), get_length_distribution(raw_data_R2[names(raw_data_R1) %in% samplesInfo[1:8, Barcode]]), 
+  common.legend=TRUE, 
+  labels = c("R1", "R2"),
+          hjust=-0.8, ncol=2) 
+```
+
+```{r}
+ggarrange(get_length_distribution(raw_data_R1[names(raw_data_R1) %in% samplesInfo[9:16, Barcode]]), get_length_distribution(raw_data_R2[names(raw_data_R1) %in% samplesInfo[9:16, Barcode]]), 
+  common.legend=TRUE, 
+  labels = c("R1", "R2"),
+          hjust=-0.8, ncol=2) 
+```
+
+### Adapter content {.tabset}
+
+#### R1 
+```{r, fig.width=9, fig.height=12}
+get_adapter_content(raw_data_R1)
+```
+
+#### R2
+```{r, fig.width=9, fig.height=12}
+get_adapter_content(raw_data_R2)
+```
+
+## Trimmed data 
+
+### Library size 
+```{r}
+get_lib_size(trimmed_data_R1)
+```
+
+### Per base quality {.tabset}
+
+#### R1 
+```{r, fig.width=9, fig.height=12}
+get_per_base_quality(trimmed_data_R1)
+```
+
+#### R2 
+```{r, fig.width=9, fig.height=12}
+get_per_base_quality(trimmed_data_R2)
+```
+
+
+### Per sequence quality
+```{r}
+ggarrange(get_per_sequence_quality(trimmed_data_R1[names(trimmed_data_R1) %in% samplesInfo[1:8, Barcode]]), get_per_sequence_quality(raw_data_R2[names(trimmed_data_R1) %in% samplesInfo[1:8, Barcode]]),  
+  common.legend=TRUE, 
+  labels = c("R1", "R2"),
+          hjust=-0.8, ncol=2) 
+```
+
+```{r}
+ggarrange(get_per_sequence_quality(raw_data_R1[names(raw_data_R1) %in% samplesInfo[9:16, Barcode]]), get_per_sequence_quality(raw_data_R2[names(raw_data_R1) %in% samplesInfo[9:16, Barcode]]),  
+  common.legend=TRUE, 
+  labels = c("R1", "R2"),
+          hjust=-0.8, ncol=2) 
+```
+
+
+
+### Per base content {.tabset}
+
+#### R1
+
+```{r, fig.width=9, fig.height=20}
+get_per_base_content(trimmed_data_R1)
+```
+
+#### R2 
+
+```{r, fig.width=9, fig.height=20}
+get_per_base_content(trimmed_data_R2)
+```
+
+### Per sequence GC content 
+
+```{r}
+ggarrange(get_per_seq_GC(trimmed_data_R1), get_per_seq_GC(trimmed_data_R2), 
+  common.legend=TRUE, 
+  labels = c("R1", "R2"),
+          hjust=-0.8, ncol=2) 
+```
+
+### Length distribution
+
+```{r}
+ggarrange(get_length_distribution(trimmed_data_R1[names(raw_data_R1) %in% samplesInfo[1:8, Barcode]]), get_length_distribution(trimmed_data_R2[names(raw_data_R1) %in% samplesInfo[1:8, Barcode]]), 
+  common.legend=TRUE, 
+  labels = c("R1", "R2"),
+          hjust=-0.8, ncol=2) 
+```
+
+```{r}
+ggarrange(get_length_distribution(trimmed_data_R1[names(raw_data_R1) %in% samplesInfo[9:16, Barcode]]), get_length_distribution(trimmed_data_R2[names(raw_data_R1) %in% samplesInfo[9:16, Barcode]]), 
+  common.legend=TRUE, 
+  labels = c("R1", "R2"),
+          hjust=-0.8, ncol=2) 
+```
+
+
+### Adapter content {.tabset}
+
+#### R1 
+```{r, fig.width=9, fig.height=12}
+get_adapter_content(trimmed_data_R1)
+```
+
+#### R2
+
+```{r, fig.width=9, fig.height=12}
+get_adapter_content(trimmed_data_R2)
+```
+
+
+## Read numbers 
+
+Mapping stats. 
+Discordant reads were not allowed (this is the reason why there are no such reads).
+
+```{r}
+d <- foreach(i=samples2do, .combine='rbind') %do% {
+  tmp <- data.table(
+          Raw=fread(cmd=paste0("cat ", wdir, "output/", i, "/", i, "_R1.fastq.gz_trimming_report.txt | grep 'Total reads processed' | awk '{print $4}' | tr -d ','")) %>% as.numeric,
+          InputMapping=fread(cmd=paste0("cat ", wdir, "logs/", i, "/hisat2.log | grep 'Total pairs:' "), sep=" ", header=FALSE ) %>% 
+                .[, V3] %>% 
+                as.numeric(),
+          MultiMapping=fread(cmd=paste0("cat ", wdir, "logs/", i, "/hisat2.log | grep 'Aligned concordantly >1 times' "), sep=" ", header=FALSE ) %>% 
+                .[, V5] %>% 
+                as.numeric(), 
+          UniquqMapping=fread(cmd=paste0("cat ", wdir, "logs/", i, "/hisat2.log | grep 'Aligned concordantly 1 time' "), sep=" ", header=FALSE ) %>% 
+                .[, V5] %>% 
+                as.numeric(),  
+          Discordant=fread(cmd=paste0("cat ", wdir, "logs/", i, "/hisat2.log | grep 'Aligned discordantly 1 time' "), sep=" ", header=FALSE ) %>% 
+                .[, V5] %>% 
+                as.numeric(), 
+          NotMapped=fread(cmd=paste0("cat ", wdir, "logs/", i, "/hisat2.log | grep 'Aligned concordantly or discordantly 0 time' "), sep=" ", header=FALSE ) %>% 
+                .[, V7] %>% 
+                as.numeric()
+                ) %>% 
+          as.data.table() %>% 
+          .[, sample := i]
+  return(tmp) 
+}
+
+as.data.table(d) %>% 
+  melt(., id.vars="sample") %>% 
+  setnames(., c("sample", "type", "reads")) %>% 
+  merge(., samplesInfo, by.x="sample", by.y="Barcode") %>% 
+  .[, step := "raw"] %>% 
+  .[type == "InputMapping", step := "cleaned"] %>% 
+  .[type == "MultiMapping", step := "mapped"] %>% 
+  .[type == "UniquqMapping", step := "mapped"] %>%
+  .[type == "Discordant", step := "mapped"] %>%
+  .[type == "NotMapped", step := "mapped"] %>%
+  .[, step := factor(step, levels=c("raw", "cleaned", "mapped"))] %>% 
+  ggplot(aes(step, reads, fill=type)) +
+    geom_col() +
+    theme_bw() +
+    scale_fill_brewer(palette="Set1") +
+    scale_y_continuous(labels = label_number(suffix = " M", scale = 1e-6)) +
+    theme(legend.position="bottom",
+          axis.title.x=element_blank(),
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    ggtitle("Reads numbers statistics") +
+    labs(fill="Type") +
+    facet_grid(vars(Replicate), vars(Group), scales="free")
+
+DT::datatable(d)
+```
+
+## Mapped data analysis {.tabset}
+
+All data are generated using non-overlapping bins (not genes) from deduplicated data. Not as good as I would like it to be..
+
+
+### Deduplicated 
+```{r}
+d <- fread("/mnt/store/kotryna/Vaidas/MIP_2023_RNA/output/mapped_counts.tsv")
+colnames(d) <- gsub("#", "", colnames(d)) %>% gsub("'", "", .) %>% gsub("dedup_si_", "", .) %>% gsub(".bam", "", .)
+
+pca <- prcomp(t(d[, -(1:3)]))
+
+merge(pca$x, samplesInfo, by.x="row.names", by.y="Barcode") %>% 
+  as.data.table() %>%
+  .[, replicate := as.character(Replicate)] %>% 
+  ggplot(aes(PC1, PC2, colour=Group, shape=Replicate)) +
+    geom_point(size=3) + 
+    theme_bw() +
+    scale_colour_brewer(palette="Dark2") +
+    theme(legend.position="bottom") +
+    ggtitle("PCA on bins from raw data. Deduplicated") +
+    labs(color = "Sample Group") +
+    xlab(paste0("PC1, ", round(summary(pca)$importance[2, 1]*100, 2), "%")) +
+    ylab(paste0("PC2, ", round(summary(pca)$importance[2, 2]*100, 2), "%")) +
+    guides(color = guide_legend(override.aes = list(size = 6)))
+```
+
+```{r, warning = FALSE, message = FALSE, results='hide', eval=FALSE}
+mds <- metaMDS(t(d[, -(1:3)]), distance = "bray", autotransform = FALSE, echo=FALSE)
+ 
+merge(mds$points, samplesInfo, by.x="row.names", by.y="Barcode") %>% 
+ as.data.table() %>%
+  .[, replicate := as.character(Replicate)] %>% 
+  ggplot(aes(MDS1, MDS2, colour=Group, shape=Replicate)) +
+    geom_point(size=3) + 
+    theme_bw() +
+    scale_colour_brewer(palette="Dark2") +
+    theme(legend.position="bottom") +
+    ggtitle("nMDS on bins from raw data") +
+    labs(color = "Sample type") +
+    guides(color = guide_legend(override.aes = list(size = 6)))
+```
+
+```{r, fig.height=8}
+Heatmap(cor((d[, -(1:3)]+1) %>% .[, samplesInfo$Barcode, with=FALSE]), 
+  name = "cor", 
+  column_title = "Correlation on log2 (bins coverage)",
+  column_title_gp = gpar(fontsize = 20, fontface = "bold"),
+  top_annotation = HeatmapAnnotation(Replicate=samplesInfo$Replicate, 
+                                     Type=samplesInfo$Group, 
+                                     col = list(Replicate=c("R1" = "red", "R2" = "green", "R3" = "blue", "R4" = "orange", "R5" = "grey"),   
+                                                Type=c("LLC1_wt"=brewer.pal(n=8,"Set1")[1], "LLC1_eDNMT1"=brewer.pal(n=8,"Set1")[2], "LLC1_eDNMT13D"=brewer.pal(n=8,"Set1")[3], "LLC1_eDNMT1eMAT2A"=brewer.pal(n=8,"Set1")[4], "MEF_wt"=brewer.pal(n=8,"Set1")[5], "MEF_eDNMT1"=brewer.pal(n=8,"Set1")[6], "MEF_eDNMT1eMAT2A"=brewer.pal(n=8,"Set1")[7], "MEF_eDNMT13D"=brewer.pal(n=8,"Set1")[8])))                                  
+                                     )
+```

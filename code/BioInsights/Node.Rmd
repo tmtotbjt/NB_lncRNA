@@ -1,0 +1,313 @@
+Protein-Protein Interaction (Baltymo-Baltymo sąveikas) nagrinėti + per koreliacijas prie susidariųsių genų grupių pridėti lncRNA
+
+Kodas didesniems setams (bent 8 mėginiai)
+
+Pakaita populiariam WGCNA (jam reikia bent 15 mėginių)
+
+```{r}
+library(pacman)
+p_load(dplyr, igraph, ggraph, tidygraph, STRINGdb, clusterProfiler, org.Hs.eg.db)
+```
+```{r}
+sig_lncRNAs <- subset(res, padj < 0.05)
+sig_lncRNAs <- sig_lncRNAs[order(sig_lncRNAs$padj), ]
+sig_lncRNAs <- as.data.frame(sig_lncRNAs)
+
+mat_filt_lnc <- mat[rownames(mat) %in% sig_lncRNAs$rn, ]
+rownames(mat_filt_lnc) <- sub("\\..*$", "", rownames(mat_filt_lnc))
+
+
+sig <- subset(res_pc, padj < 0.05)
+sig <- sig[order(sig$padj), ]
+sig <- as.data.frame(sig)
+mat_filt_pc <- mat_pc[rownames(mat_pc) %in% sig$rn, ]
+rownames(mat_filt_pc) <- sub("\\..*$", "", rownames(mat_filt_pc))
+```
+
+Pasirenkami reikiami duomenys (matrica su atfiltruotais duomenimis)
+Pašalinimas treatment effect sužinoti galimas reguliacijas pakitusių genų per koreliacijas
+```{r}
+Status <- factor(sampleInfo$Group, levels = c("POS", "NEG"))
+design <- model.matrix(~Status)
+fit <- lmFit(mat_filt_lnc, design)
+mat_lnc <- residuals.MArrayLM(fit, mat_filt_lnc)
+
+fit <- lmFit(mat_filt_pc, design)
+mat_pc <- residuals.MArrayLM(fit, mat_filt_pc)
+```
+
+Ištraukiamos reikšmingos koreliacijos: 1% geriausių
+```{r}
+cor_mat <- cor(t(mat_lnc), t(mat_pc), method="pearson")
+n_top <- ceiling(length(cor_mat) * 0.1)
+cor_vals <- as.vector(cor_mat)
+top_thr <- sort(abs(cor_vals), decreasing = TRUE)[n_top]
+sig_linked <- which(abs(cor_mat) >= top_thr, arr.ind = TRUE)
+
+lnc_ids <- rownames(mat_lnc)
+pc_ids  <- rownames(mat_pc)
+
+sig_links <- data.frame(
+  lncRNA_id = lnc_ids[sig_linked[, "row"]],
+  mRNA_id   = pc_ids[sig_linked[, "col"]],
+  correlation = cor_mat[sig_linked])
+```
+
+```{r}
+gtf <- import("~/NB_lncRNA/input/gencode.v49.annotation.gtf")
+gtf_lnc <- gtf[gtf$gene_type == "lncRNA"]
+gtf_pc <- gtf[gtf$gene_type == "protein_coding"]
+```
+
+```{r}
+lncGR <- GRanges(
+    seqnames = seqnames(gtf_lnc),
+    ranges   = ranges(gtf_lnc),
+    strand   = strand(gtf_lnc),
+    gene_name = mcols(gtf_lnc)$gene_name,
+    gene_id   = mcols(gtf_lnc)$gene_id)
+lncGR <- lncGR[lncGR$gene_id %in% rownames(sig_lncRNAs), ] #keiciam rn i rownames ir atv
+
+### pasikeisk pav
+#saveRDS(lncGR, "~/NB_lncRNA/output/code/BioInsights//.RDS")
+### pasikeisk pav
+
+
+
+geneGR <- GRanges(
+    seqnames = seqnames(gtf_pc),
+    ranges   = ranges(gtf_pc),
+    strand   = strand(gtf_pc),
+    gene_name = mcols(gtf_pc)$gene_name,
+    gene_id   = mcols(gtf_pc)$gene_id)
+geneGR <- geneGR[geneGR$gene_id %in% sig$rn, ]
+
+### pasikeisk pav
+#saveRDS(geneGR, "~/NB_lncRNA/output/code/BioInsights//.RDS")
+### pasikeisk pav
+```
+
+Sukuriama koraliacija tarp reikšmingai pakitusių lncRNA ir mRNA
+Keitimas ens į sym (STRINGdb priima tik simbolius, also piešiant pavadinimai su sym geriau atrodo)
+```{r}
+geneGR_df <- as.data.frame(geneGR)
+geneGR_df <- geneGR_df %>%
+  distinct(gene_id, .keep_all = TRUE)
+mRNA <- sig %>%
+  left_join(geneGR_df %>% 
+  dplyr::select(gene_id, gene_name), by = c("rn" = "gene_id"))
+mRNA$rn <- sub("\\..*$", "", mRNA$rn)
+geneGR_df$gene_id <- sub("\\..*$", "", geneGR_df$gene_id)
+
+sig_links <- merge(sig_links,
+                   geneGR_df[, c("gene_id", "gene_name")],
+                   by.x = "mRNA_id",
+                   by.y = "gene_id",
+                   all.x = TRUE)
+colnames(sig_links)[colnames(sig_links) == "gene_name"] <- "mRNA"
+```
+```{r}
+lncGR_df <- as.data.frame(lncGR)
+lncGR_df <- lncGR_df %>%
+  distinct(gene_id, .keep_all = TRUE)
+lncGR_df$gene_id <- sub("\\..*$", "", lncGR_df$gene_id)
+
+sig_links <- merge(sig_links,
+                   lncGR_df[, c("gene_id", "gene_name")],
+                   by.x = "lncRNA_id",
+                   by.y = "gene_id",
+                   all.x = TRUE)
+colnames(sig_links)[colnames(sig_links) == "gene_name"] <- "lncRNA"
+```
+```{r}
+sig_links <- sig_links[,c(5, 4, 3)]
+```
+
+Sumapinimas baltymą koduojančių genų pagal duomenų bazę, kuri pasako, 
+kas tarpusavyje (kokie baltymai) sąveikauja (pagal eksperimentinius duomenis).
+
+Sukuriamas grafikas su mazgais (lncRNA/baltymai) ir kraštais (koreliacijos/PPI).
+```{r}
+# Duomenų bazės įkėlimas
+string_db <- STRINGdb$new(version="12.0", 
+                          species=9606,
+                          score_threshold=700,
+                          input_directory="")
+
+# Mappinimas pagal db
+mapped_mrna <- string_db$map(data.frame(gene=sig_links$mRNA),
+                             "gene", removeUnmappedRows=TRUE)
+sig_links <- merge(sig_links, mapped_mrna, by.x="mRNA", by.y="gene")
+protein_ids <- unique(sig_links$STRING_id)
+ppi <- string_db$get_interactions(protein_ids)
+
+ppi_edges <- ppi %>% transmute(
+  from   = from,
+  to     = to,
+  weight = as.numeric(combined_score) / 1000  # normalizavimas intervalu 0-1
+)
+```
+
+Jungiamos koreliacijos lncRNA su StringDb informacija.
+```{r}
+reg_edges <- sig_links %>% transmute(
+  from   = lncRNA,
+  to     = STRING_id,
+  weight = abs(correlation))
+
+
+edges <- rbind(reg_edges, ppi_edges)
+edges <- edges %>% distinct(from, to, .keep_all = TRUE)
+edges <- edges %>% 
+  distinct(from, to, .keep_all = TRUE) %>%
+  mutate(edge_type = ifelse(from %in% sig_links$lncRNA, "lncRNA_corr", "PPI"))
+
+all_nodes <- unique(c(edges$from, edges$to))
+
+nodes <- data.frame(
+  id = all_nodes,
+  type = ifelse(all_nodes %in% sig_links$lncRNA, "lncRNA", "protein"))
+
+
+prot_map <- string_db$get_proteins()[, c("protein_external_id", "preferred_name")]
+
+nodes <- merge(nodes, prot_map, by.x = "id", by.y = "protein_external_id", all.x = TRUE)
+nodes$symbol <- ifelse(
+  nodes$type == "lncRNA",
+  nodes$id,  # lncRNA ID
+  ifelse(!is.na(nodes$preferred_name), nodes$preferred_name, nodes$id))
+
+nodes <- nodes[,c(1, 2, 4)]
+
+g <- graph_from_data_frame(edges, vertices = nodes, directed = FALSE)
+
+V(g)$degree <- degree(g, mode="all")
+```
+
+Mazgų skaičius nusako kiek elemntų turi mazgus. Čia santykis arti 1:1, 
+todėl tiriamos lncRNA sąveikauja su baltymu, mažoji dalis sąveikauja su keliais.
+
+Mazgai yra stipriai sujungti (average degree) - yra didelis mazgas su daug elementų.
+```{r}
+vcount(g)
+table(V(g)$type)
+ecount(g)  # number of edges
+avg_deg <- 2 * ecount(g) / vcount(g)
+components(g)$csize
+```
+```{r}
+bet <- betweenness(g)
+top_bet <- sort(bet, decreasing = TRUE)
+
+
+cl <- cluster_louvain(g)
+V(g)$module <- membership(cl)
+```
+
+Nustatomi modulių centrai
+```{r}
+# Module sizes
+table(V(g)$module)
+
+# List top 3 hubs in each module
+module_hubs <- lapply(unique(V(g)$module), function(m) {
+  mod_nodes <- V(g)[module == m]  # vertices in module
+  deg_values <- V(g)$degree[mod_nodes]  # degrees of these nodes
+  top_idx <- order(deg_values, decreasing = TRUE)[1:min(3, length(deg_values))]  # top 3 (or fewer)
+  
+  top_nodes <- mod_nodes[top_idx]  # vertex sequence of top nodes
+  
+  data.frame(
+    module = m,
+    node   = V(g)$symbol[top_nodes],
+    type   = V(g)$type[top_nodes],
+    degree = V(g)$degree[top_nodes]
+  )
+})
+module_hubs <- do.call(rbind, module_hubs)
+module_hubs
+
+
+tg <- as_tbl_graph(g) 
+ggraph(tg, layout = "fr") +
+  geom_edge_link(aes(color = edge_type), alpha = 0.3) +
+  geom_node_point(aes(color = type, size = degree, shape = type)) +
+  geom_node_text(aes(label = symbol), repel = TRUE, size = 3) +
+  scale_color_manual(values = c("lncRNA" = "orange", "protein" = "skyblue")) +
+  scale_edge_color_manual(values = c("lncRNA_corr" = "red", "PPI" = "#261ace")) +
+  scale_shape_manual(values = c("lncRNA" = 17, "protein" = 16)) +
+  theme_void() +
+  ggtitle("Clean LncRNA-PPI Network with Modules and Hubs")
+#saveRDS(g, file = "~/NB_lncRNA/output/code/BioInsights/graph/network_graph_PN_padj.RDS")
+#saveRDS(tg, file = "~/NB_lncRNA/output/code/BioInsights/graph/tbl_PN_padj.rds")
+```
+
+```{r}
+library(tidygraph)
+library(dplyr)
+tg <- tg %>%
+  activate(nodes) %>%
+  mutate(degree = centrality_degree(),
+         betweenness = centrality_betweenness(),
+         eigenvector = centrality_eigen() )
+node_stats <- tg %>%
+  activate(nodes) %>%
+  as_tibble()
+  
+lnc_stats <- node_stats %>%
+  filter(type == "lncRNA") %>%
+  mutate(
+    deg_rank = percent_rank(degree),
+    bet_rank = percent_rank(betweenness),
+    eig_rank = percent_rank(eigenvector) ) %>%
+  mutate(regulatory_score = deg_rank + bet_rank + eig_rank) %>%
+  arrange(desc(regulatory_score))
+
+lnc_stats_clean <- lnc_stats[,c(3:11)]
+lnc_stats_clean
+```
+```{r}
+threshold <- quantile(lnc_stats$regulatory_score, 0.75)
+
+top_lnc <- lnc_stats %>%
+  filter(regulatory_score >= threshold)
+
+top_lnc$name
+```
+
+Persidengiančios yra su tam tikrais baltymais.
+
+Bandyti atsifiltruoti pagal persidengimą, vieną grupę sukurti pagal funkciją
+(keli pc į vieną pagal funkcijos  panašumą, tokiu atveju linijos storis iš tokio taško yra pagal tai, kiek baltymų išeina)
+
+Anyways, mažinti tinklą pagal KĄ NORS (kažką filtruojant. 
+Pabandyk rasti būdų kaip susimažinti accuratly (straipnsi https://www.nature.com/articles/s41598-025-20187-3#Sec2 gal))
+
+```{r}
+lnc_enrichment_results <- list()
+
+for (lnc in top_lnc$symbol) {
+  
+  # Get neighbors
+  neigh <- neighbors(g, lnc)
+  
+  # Keep only proteins
+  proteins <- V(g)$symbol[neigh][V(g)$type[neigh] == "protein"]
+  
+  if (length(proteins) >= 3) {
+    
+    ego <- enrichGO(
+      gene = proteins,
+      OrgDb = org.Hs.eg.db,
+      keyType = "SYMBOL",
+      ont = "BP",
+      pvalueCutoff = 0.05
+    )
+    
+    lnc_enrichment_results[[lnc]] <- ego }
+}
+
+lnc_enrichment_results
+# saveRDS(lnc_enrichment_results, "~/NB_lncRNA/output/code/BioInsights/graph/lncEn_.RDS")
+```
+

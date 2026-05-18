@@ -1,0 +1,180 @@
+```{r}
+library(pacman)
+p_load(data.table, dplyr, tximport, readr, ComplexHeatmap, rtracklayer, DESeq2, 
+  RColorBrewer, ggplot2, foreach, patchwork, ggrepel, scales) 
+options(scipen=999)
+knitr::opts_chunk$set(fig.width=9, fig.height=5)
+dir.create(outdatadir, recursive=TRUE) 
+```
+
+# General stats {.tabset}
+
+## lncRNA expression 
+
+Using DESeq2 to normalize. 
+
+```{r}
+tmp <- readRDS(paste0(outdatadir, "data2DEG.RDS"))
+sampleTable <- tmp[[2]] 
+total_counts <- readRDS(paste0(outdatadir, "total_counts.RDS"))
+vsd <- readRDS(paste0(outdatadir, "vst_counts.RDS"))
+```
+
+Correlation using VST transformed counts 
+
+
+```{r}
+tmp <- cor(vsd)               
+
+ha = HeatmapAnnotation(
+  type = sampleTable[match(colnames(tmp), sampleTable$Barcode), Type],
+  rep = sampleTable[match(colnames(tmp), sampleTable$Barcode), Replicate], 
+  col =  list(rep=c("R1" = "grey80", "R2" = "grey50"),   
+             type=c("T1cH"=brewer.pal(n=12,"Paired")[1], 
+                    "T1cN"=brewer.pal(n=12,"Paired")[2], 
+                    "T1H"=brewer.pal(n=12,"Paired")[3], 
+                    "T1N"=brewer.pal(n=12,"Paired")[4], 
+                    "K7cH"=brewer.pal(n=12,"Paired")[5], 
+                    "K7cN"=brewer.pal(n=12,"Paired")[6], 
+                    "K7H"=brewer.pal(n=12,"Paired")[7], 
+                    "K7N"=brewer.pal(n=12,"Paired")[8], 
+                    "K7c24"=brewer.pal(n=12,"Paired")[9], 
+                    "K7Cu"=brewer.pal(n=12,"Paired")[10], 
+                    "K12c"=brewer.pal(n=12,"Paired")[11], 
+                    "K12Cu"=brewer.pal(n=12,"Paired")[12], 
+                    "NeNR"="azure3"
+                    )))                                  
+
+row_ha = rowAnnotation(
+  type = sampleTable[match(colnames(tmp), sampleTable$Barcode), Type],
+  rep = sampleTable[match(colnames(tmp), sampleTable$Barcode), Replicate], 
+  col =  list(rep=c("R1" = "grey80", "R2" = "grey50"),   
+             type=c("T1cH"=brewer.pal(n=12,"Paired")[1], 
+                    "T1cN"=brewer.pal(n=12,"Paired")[2], 
+                    "T1H"=brewer.pal(n=12,"Paired")[3], 
+                    "T1N"=brewer.pal(n=12,"Paired")[4], 
+                    "K7cH"=brewer.pal(n=12,"Paired")[5], 
+                    "K7cN"=brewer.pal(n=12,"Paired")[6], 
+                    "K7H"=brewer.pal(n=12,"Paired")[7], 
+                    "K7N"=brewer.pal(n=12,"Paired")[8], 
+                    "K7c24"=brewer.pal(n=12,"Paired")[9], 
+                    "K7Cu"=brewer.pal(n=12,"Paired")[10], 
+                    "K12c"=brewer.pal(n=12,"Paired")[11], 
+                    "K12Cu"=brewer.pal(n=12,"Paired")[12], 
+                    "NeNR"="azure3"
+                    )))          
+
+ht <- Heatmap(tmp , name="correlation", 
+             top_annotation = ha, 
+             right_annotation = row_ha,
+             show_column_names = FALSE, 
+             show_row_names = FALSE
+              )   
+  
+draw(ht, annotation_legend_side = "right", heatmap_legend_side = "right", legend_grouping = "original")
+```
+
+PCA on VST transformed counts 
+
+PC1, PC2 and PC3 
+Multiple colouring schemes. 
+
+```{r}
+pal <- c(brewer.pal(12, "Paired"), "azure3")
+pca <-  vsd %>% t %>% prcomp()
+summ <- summary(pca)
+p1 <- pca$x %>% 
+    as.data.table(., keep.rownames=TRUE) %>% 
+    merge(., sampleTable, by.x="rn", by.y="sample") %>% 
+    as.data.table() %>%
+    ggplot(aes(PC1, PC2, colour=Type, shape=Replicate, label=code)) +
+      geom_point(size=3) +
+      theme_bw() +
+      #geom_label_repel() +
+      theme(legend.position="bottom") +
+      xlab(paste0("PC 1: ", round(summ$importance[2,1]*100), "%")) +
+      ylab(paste0("PC 2: ", round(summ$importance[2,2]*100), "%")) +
+      scale_colour_manual(values=pal) +
+      theme(legend.position="bottom", legend.box="vertical", legend.margin=margin())
+
+p2 <- pca$x %>% 
+    as.data.table(., keep.rownames=TRUE) %>% 
+    merge(., sampleTable, by.x="rn", by.y="sample") %>% 
+    as.data.table() %>% 
+    ggplot(aes(PC2, PC3, colour=Type, shape=Replicate, label=code)) +
+      geom_point(size=3) +
+      theme_bw() +
+      #geom_label_repel() +
+      theme(legend.position="bottom") +
+      xlab(paste0("PC 2: ", round(summ$importance[2,2]*100), "%")) +
+      ylab(paste0("PC 3: ", round(summ$importance[2,3]*100), "%")) +
+      scale_colour_manual(values=pal) +
+      theme(legend.position="bottom", legend.box="vertical", legend.margin=margin())
+
+p <- p1 | p2
+p + plot_layout(guides = "collect") & theme(legend.position = 'bottom')    
+
+################## 
+
+p1 <- pca$x %>% 
+    as.data.table(., keep.rownames=TRUE) %>% 
+    merge(., sampleTable, by.x="rn", by.y="sample") %>% 
+    as.data.table() %>% 
+    ggplot(aes(PC1, PC2, colour=POSNEG, shape=Replicate, label=code)) +
+      geom_point(size=3) +
+      theme_bw() +
+      #geom_label_repel() +
+      theme(legend.position="bottom") +
+      xlab(paste0("PC 1: ", round(summ$importance[2,1]*100), "%")) +
+      ylab(paste0("PC 2: ", round(summ$importance[2,2]*100), "%")) +
+      theme(legend.position="bottom", legend.box="vertical", legend.margin=margin())
+
+p2 <- pca$x %>% 
+    as.data.table(., keep.rownames=TRUE) %>% 
+    merge(., sampleTable, by.x="rn", by.y="sample") %>% 
+    as.data.table() %>% 
+    ggplot(aes(PC2, PC3, colour=POSNEG, shape=Replicate, label=code)) +
+      geom_point(size=3) +
+      theme_bw() +
+      #geom_label_repel() +
+      theme(legend.position="bottom") +
+      xlab(paste0("PC 2: ", round(summ$importance[2,2]*100), "%")) +
+      ylab(paste0("PC 3: ", round(summ$importance[2,3]*100), "%")) +
+      theme(legend.position="bottom", legend.box="vertical", legend.margin=margin())
+
+p <- p1 | p2
+p + plot_layout(guides = "collect") & theme(legend.position = 'bottom')    
+
+
+################## 
+
+p1 <- pca$x %>% 
+    as.data.table(., keep.rownames=TRUE) %>% 
+    merge(., sampleTable, by.x="rn", by.y="sample") %>% 
+    as.data.table() %>% 
+    ggplot(aes(PC1, PC2, colour=Treatment, shape=Oxygen, label=code)) +
+      geom_point(size=3) +
+      theme_bw() +
+      #geom_label_repel() +
+      theme(legend.position="bottom") +
+      xlab(paste0("PC 1: ", round(summ$importance[2,1]*100), "%")) +
+      ylab(paste0("PC 2: ", round(summ$importance[2,2]*100), "%")) +
+      theme(legend.position="bottom", legend.box="vertical", legend.margin=margin())
+
+p2 <- pca$x %>% 
+    as.data.table(., keep.rownames=TRUE) %>% 
+    merge(., sampleTable, by.x="rn", by.y="sample") %>% 
+    as.data.table() %>% 
+    ggplot(aes(PC2, PC3, colour=Treatment, shape=Oxygen, label=code)) +
+      geom_point(size=3) +
+      theme_bw() +
+      #geom_label_repel() +
+      theme(legend.position="bottom") +
+      xlab(paste0("PC 2: ", round(summ$importance[2,2]*100), "%")) +
+      ylab(paste0("PC 3: ", round(summ$importance[2,3]*100), "%")) +
+      theme(legend.position="bottom", legend.box="vertical", legend.margin=margin())
+
+p <- p1 | p2
+p + plot_layout(guides = "collect") & theme(legend.position = 'bottom')    
+
+```
